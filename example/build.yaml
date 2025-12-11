@@ -1,0 +1,6 @@
+targets:
+  $default:
+    builders:
+      http_method|networkBuilder:
+        enabled: true
+

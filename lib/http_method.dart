@@ -7,5 +7,4 @@ export 'src/http/http_base.dart';
 export 'src/http/http_buffer.dart';
 export 'src/http/parameter.dart';
 export 'src/http/log.dart';
-
-// TODO: Export any libraries intended for clients of this package.
+export 'src/generator/annotations.dart';

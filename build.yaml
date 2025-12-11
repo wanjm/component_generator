@@ -1,0 +1,15 @@
+targets:
+  $default:
+    builders:
+      http_method|networkBuilder:
+        enabled: true
+
+builders:
+  networkBuilder:
+    import: "package:http_method/src/generator/bulder.dart"
+    builder_factories: ["networkBuilder"]
+    build_extensions: {".dart": [".g.dart"]}
+    auto_apply: dependents
+    build_to: cache
+    applies_builders: ["source_gen|combining_builder"]
+

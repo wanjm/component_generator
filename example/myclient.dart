@@ -1,5 +1,5 @@
-import 'package:http_gen_method/src/http1_client.dart' as pl;
-import 'package:http_gen_method/src/parameter.dart';
+import 'package:http_method/http1_client.dart' as pl;
+import 'package:http_method/http_method.dart';
 
 class MyClient extends pl.HttpClientBase {
   MyClient() : super();

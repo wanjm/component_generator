@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io' hide HttpClient;
 
-import './log.dart' as log;
+import 'log.dart' as log;
 import 'package:http2/http2.dart';
 
 import "http_base.dart";
-import "./parameter.dart";
+import "parameter.dart";
 // var uri = Uri.parse('https://dev.plaso.cn/custom/usr/doLogin');
 
 abstract class HttpClientBase extends HttpClient {

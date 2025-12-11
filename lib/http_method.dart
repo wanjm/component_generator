@@ -3,9 +3,9 @@
 /// More dartdocs go here.
 library;
 
-export 'src/http_base.dart';
-export 'src/http_buffer.dart';
-export 'src/parameter.dart';
-export 'src/log.dart';
+export 'src/http/http_base.dart';
+export 'src/http/http_buffer.dart';
+export 'src/http/parameter.dart';
+export 'src/http/log.dart';
 
 // TODO: Export any libraries intended for clients of this package.

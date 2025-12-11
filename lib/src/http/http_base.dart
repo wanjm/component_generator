@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'function.dart';
 
-import "./parameter.dart";
+import "parameter.dart";
 import 'http_buffer.dart';
 
 export 'http_buffer.dart';

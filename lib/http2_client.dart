@@ -1,1 +1,1 @@
-export 'src/http2_client.dart';
+export 'src/http/http2_client.dart';

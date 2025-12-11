@@ -5,7 +5,7 @@ import 'log.dart' as log;
 import 'package:http/http.dart' as http;
 
 import 'http_base.dart';
-import './parameter.dart';
+import 'parameter.dart';
 
 abstract class HttpClientBase extends HttpClient {
   late String _prefix;

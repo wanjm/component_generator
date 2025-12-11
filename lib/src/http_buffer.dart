@@ -32,8 +32,7 @@ class ClassBuffer<KT, VT> {
     buffer![key] = data as RespData<VT>;
   }
 
-  Future<RespData<VT?>> check(Parameter data, BaseMethod method, String url, String reqMethod, bool slient,
-      {Parameter? rightData}) async {
+  Future<RespData<VT?>> check(Parameter data, BaseMethod method, String url, String reqMethod, bool slient) async {
     var key = getKey(data);
     RespData<VT?>? result = getData(key);
     log.info("HttpBuffer@check url $url, result: $result, key: $key", null);
@@ -42,11 +41,7 @@ class ClassBuffer<KT, VT> {
       if (a == null) {
         a = Completer<RespData<VT?>>();
         //如果当前data没有缓存，且rightData又不为空，说明当前查找的是pdf是解析好模式的数据。data中数据的cid多_1，应该使用rightData请求正确数据。
-        if (rightData != null) {
-          proxyData(rightData, method, url, reqMethod, key, slient);
-        } else {
-          proxyData(data, method, url, reqMethod, key, slient);
-        }
+        proxyData(data, method, url, reqMethod, key, slient);
         waitlist[key] = a;
       } else {
         log.debug("return completer for $key", null);

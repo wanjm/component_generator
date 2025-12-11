@@ -75,13 +75,12 @@ abstract class BaseMethod {
     bool slient,
     String url,
     ClassBuffer<KT, VT>? buffer, {
-    dynamic rightData,
     String method = "POST",
   }) async {
     //log.debug("come to getData");
     RespData<VT?> resp; //resp和返回类型不同,为什么不报告编译错误;
     if (buffer != null) {
-      resp = await buffer.check(data, this, url, method, slient, rightData: rightData);
+      resp = await buffer.check(data, this, url, method, slient);
     } else {
       resp = await sendReq(url, data, method, slient);
       if (resp.code == 0) {

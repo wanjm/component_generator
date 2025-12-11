@@ -72,7 +72,7 @@ abstract class BaseMethod {
 
   Future<RespData<VT?>> getData<KT, VT>({
     dynamic data,
-    required bool slient,
+    bool slient=false,
     required String url,
     required Function(RespData resp) encodeDataFunction,
     ClassBuffer<KT, VT>? buffer,

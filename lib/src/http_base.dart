@@ -70,21 +70,29 @@ abstract class BaseMethod {
     return res;
   }
 
-  Future<RespData<VT?>> getData<KT, VT>(
+  Future<RespData<VT?>> getData<KT, VT>({
     dynamic data,
-    bool slient,
-    String url,
-    ClassBuffer<KT, VT>? buffer, {
+    required bool slient,
+    required String url,
+    required Function(RespData resp) encodeDataFunction,
+    ClassBuffer<KT, VT>? buffer,
     String method = "POST",
   }) async {
     //log.debug("come to getData");
     RespData<VT?> resp; //resp和返回类型不同,为什么不报告编译错误;
     if (buffer != null) {
-      resp = await buffer.check(data, this, url, method, slient);
+      resp = await buffer.check(
+        data: data,
+        method: this,
+        url: url,
+        reqMethod: method,
+        slient: slient,
+        encodeDataFunction: encodeDataFunction,
+      );
     } else {
       resp = await sendReq(url, data, method, slient);
       if (resp.code == 0) {
-        encodeData(url, resp); //将json转换为对象;
+        encodeDataFunction(resp); //将json转换为对象;
       }
       resp.res = null;
     }
@@ -92,10 +100,11 @@ abstract class BaseMethod {
     //return this.dealData(resp);
   }
 
-  RespData encodeData(String url, RespData resp);
+  // RespData encodeData(String url, RespData resp);
   Map<String, dynamic> standardData(String url, Map<String, dynamic> jsonMap) {
     return jsonMap;
   }
+
   //Future<RespData> dealData(Invocation invocation,RespData<dynamic> resp);
 }
 

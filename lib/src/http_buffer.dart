@@ -32,7 +32,14 @@ class ClassBuffer<KT, VT> {
     buffer![key] = data as RespData<VT>;
   }
 
-  Future<RespData<VT?>> check(Parameter data, BaseMethod method, String url, String reqMethod, bool slient) async {
+  Future<RespData<VT?>> check({
+    required Parameter data,
+    required BaseMethod method,
+    required String url,
+    required String reqMethod,
+    required bool slient,
+    required Function(RespData resp) encodeDataFunction,
+  }) async {
     var key = getKey(data);
     RespData<VT?>? result = getData(key);
     log.info("HttpBuffer@check url $url, result: $result, key: $key", null);
@@ -41,7 +48,15 @@ class ClassBuffer<KT, VT> {
       if (a == null) {
         a = Completer<RespData<VT?>>();
         //如果当前data没有缓存，且rightData又不为空，说明当前查找的是pdf是解析好模式的数据。data中数据的cid多_1，应该使用rightData请求正确数据。
-        proxyData(data, method, url, reqMethod, key, slient);
+        proxyData(
+          data: data,
+          method: method,
+          url: url,
+          reqMethod: reqMethod,
+          key: key,
+          slient: slient,
+          encodeDataFunction: encodeDataFunction,
+        );
         waitlist[key] = a;
       } else {
         log.debug("return completer for $key", null);
@@ -51,15 +66,32 @@ class ClassBuffer<KT, VT> {
     return result;
   }
 
-  void proxyData(Parameter data, BaseMethod method, String url, String reqMethod, KT? key, bool slient) {
+  void proxyData({
+    required Parameter data,
+    required BaseMethod method,
+    required String url,
+    required String reqMethod,
+    required KT? key,
+    required bool slient,
+    required Function(RespData resp) encodeDataFunction,
+  }) {
     log.info("proxyData@ url: $url , data: $data, key: $key, slient: $slient", null);
-    method.getData<KT, VT>(data, slient, url, null, method: reqMethod).then((oneValue) {
-      if (oneValue.code == 0) {
-        buffer![key] = oneValue;
-      }
-      waitlist[key]!.complete(oneValue);
-      waitlist.remove(key);
-    });
+    method
+        .getData<KT, VT>(
+          data: data,
+          slient: slient,
+          url: url,
+          buffer: null,
+          encodeDataFunction: encodeDataFunction,
+          method: reqMethod,
+        )
+        .then((oneValue) {
+          if (oneValue.code == 0) {
+            buffer![key] = oneValue;
+          }
+          waitlist[key]!.complete(oneValue);
+          waitlist.remove(key);
+        });
   }
 }
 
@@ -72,7 +104,15 @@ abstract class ArrayBuffer<KT, VT> extends ClassBuffer<KT, VT> {
 
   Map<String, dynamic> getParameter(List<Parameter> ps);
   @override
-  void proxyData(Parameter data, BaseMethod method, String url, String reqMethod, KT? key, bool slient) {
+  void proxyData({
+    required Parameter data,
+    required BaseMethod method,
+    required String url,
+    required String reqMethod,
+    required KT? key,
+    required bool slient,
+    required Function(RespData resp) encodeDataFunction,
+  }) {
     log.info("proxyData@url: $url, data: $data, key: $key", null);
     if (waitlist.isEmpty) {
       log.debug("wait to more request of type ArrayBuffer", null);
@@ -89,7 +129,7 @@ abstract class ArrayBuffer<KT, VT> extends ClassBuffer<KT, VT> {
             Map<String, dynamic> item = it;
             RespData<VT> one = RespData.copy(resp);
             one.res = item;
-            method.encodeData(url, one);
+            encodeDataFunction(one);
             one.res = null;
             var key = getKey(one.obj as Parameter);
             log.debug("proxyData@key $key", null);

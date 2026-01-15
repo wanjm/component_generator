@@ -9,6 +9,14 @@
             "request": "launch",
             "type": "dart",
             "program": "example/main.dart"
-        }
+        },
+        {
+            "name": "Debug Build Runner",
+            "type": "dart",
+            "request": "launch",
+            "program": ".dart_tool/build/entrypoint/build.dart",
+            "args": ["build", "--delete-conflicting-outputs"],
+            "cwd": "${workspaceFolder}/example"
+         }
     ]
 }

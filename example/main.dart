@@ -1,6 +1,6 @@
-  import 'schema.dart';
-import 'network.dart';
-import 'myclient.dart';
+  import 'lib/schema.dart';
+import 'lib/network.dart';
+import 'lib/myclient.dart';
 
 void main() async{
   client.prefix = "http://localhost:8080";

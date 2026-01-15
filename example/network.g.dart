@@ -1,7 +1,7 @@
 part of 'network.dart';
 
 class NetworkImpl extends BaseMethod implements Network {
-  NetworkImpl({required MyClient client}) : super(client: client);
+  NetworkImpl({required HttpClient client}) : super(client: client);
   @override
   Future<RespData<LoginResult?>> login(LoginParams data) => getData(
     data: data,

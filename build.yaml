@@ -6,7 +6,7 @@ targets:
 
 builders:
   networkBuilder:
-    import: "package:http_method/src/generator/bulder.dart"
+    import: "package:http_method/src/generator/builder.dart"
     builder_factories: ["networkBuilder"]
     build_extensions: {".dart": [".g.dart"]}
     auto_apply: dependents

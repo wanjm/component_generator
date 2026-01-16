@@ -8,7 +8,7 @@ builders:
   networkBuilder:
     import: "package:http_method/src/generator/builder.dart"
     builder_factories: ["networkBuilder"]
-    build_extensions: {".dart": [".g.dart"]}
+    build_extensions: {".dart": [".network.g.part"]}
     auto_apply: dependents
     build_to: cache
     applies_builders: ["source_gen|combining_builder"]

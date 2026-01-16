@@ -80,17 +80,17 @@ var $name = $clsName(client: $client);
       if (innerRespType.isDartCoreList) {
         realRespType = innerRespType.typeArguments[0] as InterfaceType;
         resultType = _typeList;
-      } else {
-        var superclass = innerRespType.superclass;
-        while (superclass != null && !superclass.isDartCoreObject) {
-          if (superclass.getDisplayString(withNullability: false) ==
-              "RSList<dynamic>") {
-            realRespType = innerRespType.typeArguments[0] as InterfaceType;
-            resultType = _typeRsList;
-            break;
-          }
-          superclass = superclass.superclass;
-        }
+      // } else {
+      //   var superclass = innerRespType.superclass;
+      //   while (superclass != null && !superclass.isDartCoreObject) {
+      //     if (superclass.getDisplayString(withNullability: false) ==
+      //         "RSList<dynamic>") {
+      //       realRespType = innerRespType.typeArguments[0] as InterfaceType;
+      //       resultType = _typeRsList;
+      //       break;
+      //     }
+      //     superclass = superclass.superclass;
+      //   }
       }
     }
 
@@ -111,18 +111,18 @@ var $name = $clsName(client: $client);
             return a;
           }).toList();""";
         break;
-      case _typeRsList:
-        formatCode = """
-          Map<String, dynamic> objs = resp.res;
-          var b = (objs["rs"] as List?)?.map((e) {
-            var a = $respName.fromJson(e);
-            $format
-            return a;
-          }).toList();
-          var a = ${innerRespType.getDisplayString(withNullability: false)}.fromJson(resp.res);
-          a.rs = b;
-          resp.obj = a;""";
-        break;
+      // case _typeRsList:
+      //   formatCode = """
+      //     Map<String, dynamic> objs = resp.res;
+      //     var b = (objs["rs"] as List?)?.map((e) {
+      //       var a = $respName.fromJson(e);
+      //       $format
+      //       return a;
+      //     }).toList();
+      //     var a = ${innerRespType.getDisplayString(withNullability: false)}.fromJson(resp.res);
+      //     a.rs = b;
+      //     resp.obj = a;""";
+      //   break;
       default:
         if (format.isEmpty) {
           formatCode = "resp.obj = $respName.fromJson(resp.res);";
@@ -137,18 +137,15 @@ var $name = $clsName(client: $client);
     final reqMethod = reader.peek("method")?.stringValue ?? "POST";
     final bufferName = reader.peek("buffer")?.stringValue ?? "null";
 
-    final String displayString = (f as dynamic).displayString();
-    final paramsStart = displayString.indexOf('(');
-    final paramsEnd = displayString.lastIndexOf(')');
-    final paramsString = displayString.substring(paramsStart + 1, paramsEnd);
 
-    final dynamic parameters = (f as dynamic).formalParameters;
+    final String methodDisplayString = f.displayString();
+    final dynamic parameters = f.formalParameters;
     final List paramsList = (parameters is List) ? parameters : [];
 
     final firstParam =
-        paramsList.isNotEmpty ? (paramsList[0] as dynamic).name : "null";
+        paramsList.isNotEmpty ? paramsList[0].name : "null";
     final secondParam =
-        paramsList.length > 1 ? (paramsList[1] as dynamic).name : "false";
+        paramsList.length > 1 ? (paramsList[1]).name : "false";
 
     final bufferString = bufferName != "null" ? "buffer: $bufferName," : "";
     final methodString = reqMethod != "POST" ? "method: \"$reqMethod\"," : "";
@@ -156,7 +153,7 @@ var $name = $clsName(client: $client);
 
     final implementation = """
   @override
-  ${returnType.getDisplayString(withNullability: true)} ${f.name}($paramsString) => getData(
+  $methodDisplayString=> getData(
         data: $firstParam,
         $slientString
         url: "$url",

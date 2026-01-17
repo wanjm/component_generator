@@ -1,10 +1,27 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
+import 'package:path/path.dart' as p;
 import 'package:source_gen/source_gen.dart';
 import 'package:dart_style/dart_style.dart';
 import 'package:http_method/src/generator/annotations.dart';
+
+const String _myClientTemplate = """import 'package:http_method/http1_client.dart' as pl;
+import 'package:http_method/http_method.dart';
+
+class MyClient extends pl.HttpClientBase {
+  MyClient() : super();
+  @override
+  int checkResult(RespData<dynamic> a, String url, Map<String, String> headers) {
+    return 0;
+  }
+}
+MyClient client = MyClient();
+
+var bufferMap = <String, ClassBuffer<dynamic, dynamic>>{};
+""";
 
 const int _typeList = 1;
 const int _typeRsList = 2;
@@ -15,11 +32,20 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
   final _formatter =
       DartFormatter(languageVersion: DartFormatter.latestLanguageVersion);
 
+  static final Set<String> _myClientChecked = <String>{};
+
   @override
   FutureOr<String> generateForAnnotatedElement(
-      Element element, ConstantReader annotation, BuildStep buildStep) {
+      Element element, ConstantReader annotation, BuildStep buildStep) async {
     if (element is! ClassElement) {
       return "";
+    }
+
+    // 检查并复制 myclient.dart 模板文件（每个包只检查一次）
+    final package = buildStep.inputId.package;
+    if (!_myClientChecked.contains(package)) {
+      _myClientChecked.add(package);
+      await _ensureMyClientExists(buildStep, package);
     }
 
     final cls = element;
@@ -168,6 +194,31 @@ var $name = $clsName(client: $client);
       );""";
 
     return _MethodData(implementation);
+  }
+
+  /// 确保 myclient.dart 文件存在，如果不存在则从模板复制
+  Future<void> _ensureMyClientExists(BuildStep buildStep, String package) async {
+    try {
+      // 使用文件系统操作：检查目标文件是否存在
+      final currentDir = Directory.current.path;
+      final targetFile = File(p.join(currentDir, 'lib', 'myclient.dart'));
+      
+      // 如果文件已存在，直接返回
+      if (await targetFile.exists()) {
+        return;
+      }
+
+      // 尝试从 buildStep 读取模板文件
+      String templateContent = _myClientTemplate;
+      // 确保目录存在
+      await targetFile.parent.create(recursive: true);
+      
+      // 复制模板内容到目标文件
+      await targetFile.writeAsString(templateContent);
+    } catch (e) {
+      // 如果文件操作失败，忽略错误
+      // 用户需要手动创建 myclient.dart
+    }
   }
 }
 

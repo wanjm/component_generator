@@ -13,6 +13,7 @@ class NetworkImpl extends BaseMethod implements Network {
   Future<RespData<LoginResult?>> login(LoginParams data) => getData(
         data: data,
         url: "/user/login",
+        buffer: bufferMap["/user/login"] as ClassBuffer<int, LoginResult>?,
         encodeDataFunction: (RespData resp) {
           resp.obj = LoginResult.fromJson(resp.res);
         },

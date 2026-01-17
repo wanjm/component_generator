@@ -3,7 +3,7 @@ import 'schema.dart';
 import 'myclient.dart';
 part 'network.g.dart';
 
-@DataInterface("network", "client")
+@DataInterface()
 abstract class Network {
   @ReqConfig("/user/login")
   Future<RespData<LoginResult?>> login(LoginParams data);

@@ -98,68 +98,79 @@ var $name = $clsName(client: $client);
     if (respType.typeArguments.isEmpty) return null;
 
     final innerRespType = respType.typeArguments[0];
-    if (innerRespType is! InterfaceType) return null;
-
-    InterfaceType? realRespType;
-    String format = "";
-    int? resultType;
-
-    if (innerRespType.typeArguments.isNotEmpty) {
-      if (innerRespType.isDartCoreList) {
-        realRespType = innerRespType.typeArguments[0] as InterfaceType;
-        resultType = _typeList;
-      // } else {
-      //   var superclass = innerRespType.superclass;
-      //   while (superclass != null && !superclass.isDartCoreObject) {
-      //     if (superclass.getDisplayString(withNullability: false) ==
-      //         "RSList<dynamic>") {
-      //       realRespType = innerRespType.typeArguments[0] as InterfaceType;
-      //       resultType = _typeRsList;
-      //       break;
-      //     }
-      //     superclass = superclass.superclass;
-      //   }
-      }
-    }
-
-    realRespType ??= innerRespType;
-
-    final respName = realRespType.getDisplayString(withNullability: false);
-    if (innerRespType.getMethod("formatData") != null) {
-      format = "a.formatData();";
-    }
-
+    final isDynamic = innerRespType is DynamicType;
+    
+    String respName="";
     String formatCode;
-    switch (resultType) {
-      case _typeList:
-        formatCode = """
+    
+    if (isDynamic) {
+      // Handle dynamic type - skip fromJson
+      formatCode = "resp.obj = resp.res;";
+    } else {
+      // Handle non-dynamic types
+      if (innerRespType is! InterfaceType) return null;
+
+      final innerRespTypeInterface = innerRespType;
+      InterfaceType? realRespType;
+      int? resultType;
+
+      if (innerRespTypeInterface.typeArguments.isNotEmpty) {
+        if (innerRespTypeInterface.isDartCoreList) {
+          realRespType = innerRespTypeInterface.typeArguments[0] as InterfaceType;
+          resultType = _typeList;
+        // } else {
+        //   var superclass = innerRespType.superclass;
+        //   while (superclass != null && !superclass.isDartCoreObject) {
+        //     if (superclass.getDisplayString(withNullability: false) ==
+        //         "RSList<dynamic>") {
+        //       realRespType = innerRespType.typeArguments[0] as InterfaceType;
+        //       resultType = _typeRsList;
+        //       break;
+        //     }
+        //     superclass = superclass.superclass;
+        //   }
+        }
+      }
+
+      realRespType ??= innerRespTypeInterface;
+      respName = realRespType.getDisplayString();
+      
+      String format = "";
+      if (innerRespTypeInterface.getMethod("formatData") != null) {
+        format = "a.formatData();";
+      }
+
+      switch (resultType) {
+        case _typeList:
+          formatCode = """
           resp.obj = (resp.res as List?)?.map((e) {
             var a = $respName.fromJson(e);
             $format
             return a;
           }).toList();""";
-        break;
-      // case _typeRsList:
-      //   formatCode = """
-      //     Map<String, dynamic> objs = resp.res;
-      //     var b = (objs["rs"] as List?)?.map((e) {
-      //       var a = $respName.fromJson(e);
-      //       $format
-      //       return a;
-      //     }).toList();
-      //     var a = ${innerRespType.getDisplayString(withNullability: false)}.fromJson(resp.res);
-      //     a.rs = b;
-      //     resp.obj = a;""";
-      //   break;
-      default:
-        if (format.isEmpty) {
-          formatCode = "resp.obj = $respName.fromJson(resp.res);";
-        } else {
-          formatCode = """
-          resp.obj = $respName.fromJson(resp.res);
-          var a = resp.obj;
-          $format""";
-        }
+          break;
+        // case _typeRsList:
+        //   formatCode = """
+        //     Map<String, dynamic> objs = resp.res;
+        //     var b = (objs["rs"] as List?)?.map((e) {
+        //       var a = $respName.fromJson(e);
+        //       $format
+        //       return a;
+        //     }).toList();
+        //     var a = ${innerRespType.getDisplayString(withNullability: false)}.fromJson(resp.res);
+        //     a.rs = b;
+        //     resp.obj = a;""";
+        //   break;
+        default:
+          if (format.isEmpty) {
+            formatCode = "resp.obj = $respName.fromJson(resp.res);";
+          } else {
+            formatCode = """
+            resp.obj = $respName.fromJson(resp.res);
+            var a = resp.obj;
+            $format""";
+          }
+      }
     }
 
     final reqMethod = reader.peek("method")?.stringValue ?? "POST";
@@ -176,7 +187,7 @@ var $name = $clsName(client: $client);
     final secondParam =
         paramsList.length > 1 ? (paramsList[1]).name : "false";
 
-    final bufferString = "buffer: bufferMap[\"$url\"] as ClassBuffer<$keyTypeString, $respName>?,";
+    final bufferString = isDynamic ? "" : "buffer: bufferMap[\"$url\"] as ClassBuffer<$keyTypeString, $respName>?,";
     final methodString = reqMethod != "POST" ? "method: \"$reqMethod\"," : "";
     final slientString = secondParam != "false" ? "slient: $secondParam," : "";
 

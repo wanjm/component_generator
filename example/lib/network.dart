@@ -6,5 +6,5 @@ part 'network.g.dart';
 @DataInterface()
 abstract class Network {
   @ReqConfig("/user/login")
-  Future<RespData<LoginResult?>> login(LoginParams data);
+  Future<RespData> login(LoginParams data);
 }

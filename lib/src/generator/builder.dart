@@ -191,7 +191,7 @@ class $clsName extends BaseMethod $withMixin implements $ifName {
   ${methods.join("\n\n  ")}
 }
 
-var $name = $clsName(client: $client);
+var ${name}Service = $clsName(client: $client);
 """;
   }
 
@@ -324,8 +324,10 @@ var $name = $clsName(client: $client);
   Future<void> _ensureMyClientExists(BuildStep buildStep, String package) async {
     try {
       // 使用文件系统操作：检查目标文件是否存在
-      final currentDir = Directory.current.path;
-      final targetFile = File(p.join(currentDir, 'lib', 'myclient.dart'));
+      // 获取源文件所在的目录（与 .g.dart 文件相同的目录）
+      final sourcePath = buildStep.inputId.path;
+      final sourceDir = p.dirname(sourcePath);
+      final targetFile = File(p.join(sourceDir, 'myclient.dart'));
       
       // 如果文件已存在，直接返回
       if (await targetFile.exists()) {

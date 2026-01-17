@@ -39,8 +39,10 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
       }
     }
 
-    final client = annotation.read("client").stringValue;
-    final name = annotation.read("name").stringValue;
+    final clientValue = annotation.read("client").stringValue;
+    final nameValue = annotation.read("name").stringValue;
+    final client = clientValue.isNotEmpty ? clientValue : "client";
+    final name = nameValue.isNotEmpty ? nameValue : (cls.name!.isEmpty ? cls.name! : cls.name![0].toLowerCase() + cls.name!.substring(1));
 
     return """
 class $clsName extends BaseMethod $withMixin implements $ifName {
@@ -135,7 +137,8 @@ var $name = $clsName(client: $client);
     }
 
     final reqMethod = reader.peek("method")?.stringValue ?? "POST";
-    final bufferName = reader.peek("buffer")?.stringValue ?? "null";
+    final keyType = reader.peek("keyType")?.stringValue ?? "";
+    final keyTypeString = keyType.isNotEmpty ? keyType : "int";
 
 
     final String methodDisplayString = f.displayString();
@@ -147,7 +150,7 @@ var $name = $clsName(client: $client);
     final secondParam =
         paramsList.length > 1 ? (paramsList[1]).name : "false";
 
-    final bufferString = bufferName != "null" ? "buffer: $bufferName," : "";
+    final bufferString = "buffer: bufferMap[\"$url\"] as ClassBuffer<$keyTypeString, $respName>?,";
     final methodString = reqMethod != "POST" ? "method: \"$reqMethod\"," : "";
     final slientString = secondParam != "false" ? "slient: $secondParam," : "";
 

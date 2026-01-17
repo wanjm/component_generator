@@ -9,3 +9,5 @@ class MyClient extends pl.HttpClientBase {
   }
 }
 MyClient client = MyClient();
+
+var bufferMap = <String, ClassBuffer<dynamic, dynamic>>{};

@@ -212,12 +212,12 @@ var ${name}Service = $clsName(client: $client);
     if (respType.typeArguments.isEmpty) return null;
 
     final innerRespType = respType.typeArguments[0];
-    final isDynamic = innerRespType is DynamicType;
+    final noDetailData = innerRespType is VoidType|| innerRespType is DynamicType;
     
     String respName="";
     String formatCode;
     
-    if (isDynamic) {
+    if (noDetailData) {
       // Handle dynamic type - skip fromJson
       formatCode = "resp.obj = resp.res;";
     } else {
@@ -300,7 +300,7 @@ var ${name}Service = $clsName(client: $client);
     final secondParam =
         paramsList.length > 1 ? (paramsList[1]).name : "false";
 
-    final bufferString = isDynamic ? "" : "buffer: bufferMap[\"$url\"] as ClassBuffer<$keyTypeString, $respName>?,";
+    final bufferString = noDetailData ? "" : "buffer: bufferMap[\"$url\"] as ClassBuffer<$keyTypeString, $respName>?,";
     final methodString = reqMethod != "POST" ? "method: \"$reqMethod\"," : "";
     final slientString = secondParam != "false" ? "slient: $secondParam," : "";
 

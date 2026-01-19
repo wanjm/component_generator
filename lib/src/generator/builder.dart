@@ -182,7 +182,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     final clientValue = annotation.read("client").stringValue;
     final nameValue = annotation.read("name").stringValue;
     final client = clientValue.isNotEmpty ? clientValue : "client";
-    final name = nameValue.isNotEmpty ? nameValue : (cls.name!.isEmpty ? cls.name! : cls.name![0].toLowerCase() + cls.name!.substring(1));
+    final name = nameValue.isNotEmpty ? nameValue : "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Service";
 
     return """
 class $clsName extends BaseMethod $withMixin implements $ifName {
@@ -436,7 +436,7 @@ class FetchDataGenerator extends Generator {
     final methodName = f.name;
     
     // 获取 DataInterface 的 name 属性作为 serviceInstanceName
-    String serviceInstanceName = "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Service";
+    String serviceInstanceName;
     final dataInterfaceChecker = TypeChecker.typeNamed(DataInterface);
     final dataInterfaceAnnotation = dataInterfaceChecker.firstAnnotationOf(cls);
     if (dataInterfaceAnnotation != null) {
@@ -445,8 +445,10 @@ class FetchDataGenerator extends Generator {
       if (nameValue.isNotEmpty) {
         serviceInstanceName = nameValue;
       } else {
-        serviceInstanceName = "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}";
+        serviceInstanceName = "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Service";
       }
+    }else{
+      return "";
     }
 
     return """
@@ -483,6 +485,6 @@ class FetchDataGenerator extends Generator {
 Builder fetchBuilder(BuilderOptions options) {
   return LibraryBuilder(
     FetchDataGenerator(),
-    generatedExtension: '.fetch.gen.dart',
+    generatedExtension: '.fetch.dart',
   );
 }

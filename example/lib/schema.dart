@@ -1,9 +1,11 @@
 import 'package:http_method/http_method.dart';
 
 class LoginParams extends JSONParameter {
-  final String loginName;
-  final String password;
-  final int loginType = 0;
+  String loginName;
+  String password;
+  int loginType = 0;
+  int pageNum = 0;
+  int pageSize = 0;
 
   LoginParams(this.loginName, this.password);
 
@@ -13,8 +15,26 @@ class LoginParams extends JSONParameter {
       "loginName": loginName,
       "password": password,
       "loginType": loginType,
+      "pageNum": pageNum,
+      "pageSize": pageSize,
     };
   }
+}
+
+class UserInfo {
+  String name;
+  UserInfo({this.name = ""});
+  factory UserInfo.fromJson(Map<String, dynamic> json) => UserInfo(name: json['name'] ?? "");
+}
+
+class ListUserResp {
+  int total;
+  List<UserInfo> list;
+  ListUserResp({this.total = 0, this.list = const []});
+  factory ListUserResp.fromJson(Map<String, dynamic> json) => ListUserResp(
+        total: json['total'] ?? 0,
+        list: (json['list'] as List? ?? []).map((e) => UserInfo.fromJson(e)).toList(),
+      );
 }
 
 class LoginResult {

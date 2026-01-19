@@ -28,7 +28,7 @@ const String _pcTemplate = """import 'package:flutter/foundation.dart';
 class PaginationController<T> extends ChangeNotifier {
   int _pageNum;
   int _pageSize;
-  T _param;
+  final T _param;
   int? _totalCount;
   
   // Separate notifier for count changes

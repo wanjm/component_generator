@@ -577,13 +577,13 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
 
     if (types.contains("table")) {
       buffer.writeln("""
-  List<DataColumn> GetTableHeader() {
+  List<DataColumn> getTableHeader() {
     return [
       ${headers.join(",\n      ")}
     ];
   }
 
-  List<DataCell> GetTableData() {
+  List<DataCell> getTableData() {
     return [
       ${cells.join(",\n      ")}
     ];
@@ -593,7 +593,7 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
 
     if (types.contains("detail")) {
       buffer.writeln("""
-  List<TableRow> GetDetailRows() {
+  List<TableRow> getDetailRows() {
     return [
       ${detailRows.join(",\n        ")}
     ];

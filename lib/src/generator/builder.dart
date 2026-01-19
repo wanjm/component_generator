@@ -191,7 +191,7 @@ class $clsName extends BaseMethod $withMixin implements $ifName {
   ${methods.join("\n\n  ")}
 }
 
-var ${name}Service = $clsName(client: $client);
+var $name = $clsName(client: $client);
 """;
   }
 

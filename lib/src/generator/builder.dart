@@ -501,7 +501,7 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
         .listValue
         .map((e) => e.toStringValue() ?? "")
         .toList();
-    if (!types.contains("table")) return "";
+    if (types.isEmpty) return "";
 
     final useI18n = annotation.read("useI18n").boolValue;
     final i18nFunction = annotation.read("i18nFunction").stringValue;
@@ -509,6 +509,7 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
     final cls = element;
     final headers = <String>[];
     final cells = <String>[];
+    final detailRows = <String>[];
 
     final tableFieldChecker = TypeChecker.typeNamed(TableField);
 
@@ -553,10 +554,19 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
         valueExpr = "Center(child: $valueExpr)";
       }
       cells.add("DataCell($valueExpr)");
+
+      // Detail row generation
+      detailRows.add("""TableRow(children: [
+        Padding(padding: const EdgeInsets.all(8.0), child: $columnLabel),
+        Padding(padding: const EdgeInsets.all(8.0), child: Text(${field.name}.toString())),
+      ])""");
     }
 
-    return """
-extension ${cls.name}WidgetExt on ${cls.name} {
+    final buffer = StringBuffer();
+    buffer.writeln("extension ${cls.name}WidgetExt on ${cls.name} {");
+
+    if (types.contains("table")) {
+      buffer.writeln("""
   List<DataColumn> GetTableHeader() {
     return [
       ${headers.join(",\n      ")}
@@ -568,8 +578,21 @@ extension ${cls.name}WidgetExt on ${cls.name} {
       ${cells.join(",\n      ")}
     ];
   }
-}
-""";
+""");
+    }
+
+    if (types.contains("detail")) {
+      buffer.writeln("""
+  List<TableRow> GetDetailRows() {
+    return [
+      ${detailRows.join(",\n        ")}
+    ];
+  }
+""");
+    }
+
+    buffer.writeln("}");
+    return buffer.toString();
   }
 }
 

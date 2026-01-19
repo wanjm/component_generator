@@ -15,3 +15,18 @@ class ReqConfig {
 class FetchData {
   const FetchData();
 }
+
+class GenWidget {
+  final List<String> types;
+  final bool useI18n;
+  final String i18nFunction;
+  const GenWidget(this.types,
+      {this.useI18n = false, this.i18nFunction = 'tr'});
+}
+
+class TableField {
+  final String? label;
+  final String? tag;
+  final bool ignore;
+  const TableField({this.label, this.tag, this.ignore = false});
+}

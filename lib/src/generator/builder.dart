@@ -488,3 +488,95 @@ Builder fetchBuilder(BuilderOptions options) {
     generatedExtension: '.fetch.dart',
   );
 }
+
+/// 自动生成 Widget 相关代码的 Builder
+class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
+  @override
+  FutureOr<String> generateForAnnotatedElement(
+      Element element, ConstantReader annotation, BuildStep buildStep) {
+    if (element is! ClassElement) return "";
+
+    final types = annotation
+        .read("types")
+        .listValue
+        .map((e) => e.toStringValue() ?? "")
+        .toList();
+    if (!types.contains("table")) return "";
+
+    final useI18n = annotation.read("useI18n").boolValue;
+    final i18nFunction = annotation.read("i18nFunction").stringValue;
+
+    final cls = element;
+    final headers = <String>[];
+    final cells = <String>[];
+
+    final tableFieldChecker = TypeChecker.typeNamed(TableField);
+
+    for (var field in cls.fields) {
+      if (field.isStatic || field.isPrivate) continue;
+
+      final fieldAnnotation = tableFieldChecker.firstAnnotationOf(field);
+      String? fieldLabel;
+      String? fieldTag;
+      bool fieldIgnore = false;
+
+      if (fieldAnnotation != null) {
+        final reader = ConstantReader(fieldAnnotation);
+        fieldLabel = reader.peek("label")?.stringValue;
+        fieldTag = reader.peek("tag")?.stringValue;
+        fieldIgnore = reader.peek("ignore")?.boolValue ?? false;
+      }
+
+      if (fieldIgnore) continue;
+
+      String columnLabel;
+      if (fieldLabel != null) {
+        columnLabel = "const Text('$fieldLabel')";
+      } else if (fieldTag != null) {
+        columnLabel = "Text($i18nFunction('$fieldTag'))";
+      } else if (useI18n) {
+        columnLabel = "Text($i18nFunction('${cls.name}.${field.name}'))";
+      } else {
+        String label = field.documentationComment ?? "";
+        label = label.replaceAll(RegExp(r'^///\s*'), '').trim();
+        if (label.isNotEmpty) {
+          label = label.split(RegExp(r'\s+')).first;
+        }
+        if (label.isEmpty) label = field.name ?? "";
+        columnLabel = "const Text('$label')";
+      }
+
+      headers.add("DataColumn(label: $columnLabel)");
+
+      String valueExpr = "Text(${field.name}.toString())";
+      if (field.type.isDartCoreInt || field.type.isDartCoreDouble) {
+        valueExpr = "Center(child: $valueExpr)";
+      }
+      cells.add("DataCell($valueExpr)");
+    }
+
+    return """
+extension ${cls.name}WidgetExt on ${cls.name} {
+  List<DataColumn> GetTableHeader() {
+    return [
+      ${headers.join(",\n      ")}
+    ];
+  }
+
+  List<DataCell> GetTableData() {
+    return [
+      ${cells.join(",\n      ")}
+    ];
+  }
+}
+""";
+  }
+}
+
+/// WidgetBuilder 工厂方法
+Builder widgetBuilder(BuilderOptions options) {
+  return SharedPartBuilder(
+    [WidgetBuilder()],
+    'widget',
+  );
+}

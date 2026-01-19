@@ -23,8 +23,7 @@ builders:
   widgetBuilder:
     import: "package:http_method/src/generator/builder.dart"
     builder_factories: ["widgetBuilder"]
-    build_extensions: {".dart": [".widget.g.part"]}
+    build_extensions: {".dart": [".widget.gen.dart"]}
     auto_apply: dependents
-    build_to: cache
-    applies_builders: ["source_gen|combining_builder"]
+    build_to: source
 

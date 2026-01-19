@@ -417,18 +417,22 @@ class FetchDataGenerator extends Generator {
     if (respType is! InterfaceType) return null;
     if (respType.typeArguments.isEmpty) return null;
 
-    final innerRespType = respType.typeArguments[0];
+    var innerRespType = respType.typeArguments[0];
     if (innerRespType is! InterfaceType) return null;
 
-    // 检查 innerRespType 是否包含 list 和 total 字段
+    // 获取非空类型
     final innerElement = innerRespType.element;
+    if (innerElement is! InterfaceElement) return null;
 
     final listField = innerElement.getField('list');
     final totalField = innerElement.getField('total');
 
     if (listField == null || totalField == null) return null;
 
-    final listItemType = (listField.type as InterfaceType).typeArguments[0];
+    final listFieldType = listField.type;
+    if (listFieldType is! InterfaceType || listFieldType.typeArguments.isEmpty)
+      return null;
+    final listItemType = listFieldType.typeArguments[0];
     final parameters = (f.type as dynamic).parameters as List;
     final reqType = parameters.isNotEmpty ? parameters[0].type : null;
     if (reqType == null) return null;
@@ -507,6 +511,8 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
     final i18nFunction = annotation.read("i18nFunction").stringValue;
 
     final cls = element;
+    final fileName = p.basename(buildStep.inputId.path);
+
     final headers = <String>[];
     final cells = <String>[];
     final detailRows = <String>[];
@@ -563,6 +569,10 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
     }
 
     final buffer = StringBuffer();
+    buffer.writeln("import 'package:flutter/material.dart';");
+    buffer.writeln("import 'package:http_method/http_method.dart';");
+    buffer.writeln("import '$fileName';");
+    buffer.writeln();
     buffer.writeln("extension ${cls.name}WidgetExt on ${cls.name} {");
 
     if (types.contains("table")) {
@@ -598,8 +608,8 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
 
 /// WidgetBuilder 工厂方法
 Builder widgetBuilder(BuilderOptions options) {
-  return SharedPartBuilder(
-    [WidgetBuilder()],
-    'widget',
+  return LibraryBuilder(
+    WidgetBuilder(),
+    generatedExtension: '.widget.gen.dart',
   );
 }

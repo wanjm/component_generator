@@ -570,14 +570,13 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
 
     final buffer = StringBuffer();
     buffer.writeln("import 'package:flutter/material.dart';");
-    buffer.writeln("import 'package:http_method/http_method.dart';");
     buffer.writeln("import '$fileName';");
     buffer.writeln();
     buffer.writeln("extension ${cls.name}WidgetExt on ${cls.name} {");
 
     if (types.contains("table")) {
       buffer.writeln("""
-  List<DataColumn> getTableHeader() {
+  static List<DataColumn> getTableHeader() {
     return [
       ${headers.join(",\n      ")}
     ];

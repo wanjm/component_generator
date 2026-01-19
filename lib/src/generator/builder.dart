@@ -363,41 +363,49 @@ Builder networkBuilder(BuilderOptions options) {
 }
 
 /// 自动生成 fetchData 的 Builder
-class FetchDataGenerator extends GeneratorForAnnotation<FetchData> {
+class FetchDataGenerator extends Generator {
   @override
-  FutureOr<String> generateForAnnotatedElement(
-      Element element, ConstantReader annotation, BuildStep buildStep) async {
-    if (element is! ClassElement) {
-      return "";
-    }
-
-    final cls = element;
-    final fetchMethods = <String>[];
+  FutureOr<String> generate(LibraryReader library, BuildStep buildStep) async {
+    final annotatedElements =
+        library.annotatedWith(TypeChecker.typeNamed(FetchData));
+    if (annotatedElements.isEmpty) return "";
 
     // 确保 pagination_controller.dart 在同级目录存在
     await _ensurePaginationControllerExists(buildStep);
 
-    for (var method in cls.methods) {
-      final methodData = _processFetchMethod(method, cls);
-      if (methodData != null) {
-        fetchMethods.add(methodData);
+    final fileName = p.basename(buildStep.inputId.path);
+    final buffer = StringBuffer();
+
+    buffer.writeln("import 'package:http_method/http_method.dart';");
+    buffer.writeln("import 'pagination_controller.dart';");
+    buffer.writeln("import 'schema.gen.dart';");
+    buffer.writeln("import '$fileName';");
+    buffer.writeln();
+
+    for (var annotatedElement in annotatedElements) {
+      final element = annotatedElement.element;
+      if (element is! ClassElement) continue;
+
+      final cls = element;
+      final fetchMethods = <String>[];
+
+      for (var method in cls.methods) {
+        final methodData = _processFetchMethod(method, cls);
+        if (methodData != null) {
+          fetchMethods.add(methodData);
+        }
       }
+
+      if (fetchMethods.isEmpty) continue;
+
+      final fetchClsName = "${cls.name}Fetch";
+      buffer.writeln("class $fetchClsName {");
+      buffer.writeln("  ${fetchMethods.join("\n\n  ")}");
+      buffer.writeln("}");
+      buffer.writeln();
     }
 
-    if (fetchMethods.isEmpty) return "";
-
-    final fetchClsName = "${cls.name}Fetch";
-    final fileName = p.basename(buildStep.inputId.path);
-
-    return """
-import 'package:http_method/http_method.dart';
-import 'pagination_controller.dart';
-import '$fileName';
-
-class $fetchClsName {
-  ${fetchMethods.join("\n\n  ")}
-}
-""";
+    return buffer.toString();
   }
 
   String? _processFetchMethod(MethodElement f, ClassElement cls) {
@@ -444,13 +452,8 @@ class $fetchClsName {
     return """
   static Future<List<${listItemType.getDisplayString(withNullability: false)}>> $methodName(PaginationController<${reqType.getDisplayString(withNullability: false)}> controller) async {
     final baseParam = controller.param;
-    // Assume baseParam has pageNum and pageSize fields based on the common pattern
-    try {
-      (baseParam as dynamic).pageNum = controller.pageNum;
-      (baseParam as dynamic).pageSize = controller.pageSize;
-    } catch (_) {
-      // If fields don't exist, ignore
-    }
+    baseParam.pageNum = controller.pageNum;
+    baseParam.pageSize = controller.pageSize;
 
     final resp = await $serviceInstanceName.$methodName(baseParam);
 

@@ -23,8 +23,122 @@ MyClient client = MyClient();
 var bufferMap = <String, ClassBuffer<dynamic, dynamic>>{};
 """;
 
+const String _pcTemplate = """import 'package:flutter/foundation.dart';
+
+class PaginationController<T> extends ChangeNotifier {
+  int _pageNum;
+  int _pageSize;
+  T _param;
+  int? _totalCount;
+  
+  // Separate notifier for count changes
+  final ValueNotifier<int?> _countNotifier = ValueNotifier<int?>(null);
+
+  PaginationController({
+    int initialPageNo = 0,
+    int initialPageSize = 10,
+    required T initialParam,
+  })  : _pageNum = initialPageNo,
+        _pageSize = initialPageSize,
+        _param = initialParam;
+
+  // Getters
+  int get pageNum => _pageNum;
+  int get pageSize => _pageSize;
+  T get param => _param;
+  int? get totalCount => _totalCount;
+  
+  // Getter for count notifier (for listening to count changes)
+  ValueNotifier<int?> get countNotifier => _countNotifier;
+
+  // Calculate total pages (pageCount)
+  int? get pageCount {
+    if (_totalCount == null) return null;
+    return (_totalCount! / _pageSize).ceil();
+  }
+  
+  // Alias for backward compatibility
+  int? get totalPages => pageCount;
+
+  // Check if can go to next/previous page
+  bool get canGoNext {
+    if (_totalCount == null || pageCount == null) return false;
+    return _pageNum < pageCount! - 1;
+  }
+
+  bool get canGoPrevious => _pageNum > 0;
+
+  // Set total count (called by content widget after fetching data)
+  void setTotalCount(int total) {
+    if (_totalCount != total) {
+      _totalCount = total;
+      // Notify count notifier
+      _countNotifier.value = total;
+      // Also notify main listeners (for pageNo/pageSize changes)
+      notifyListeners();
+    }
+  }
+
+  // Set page number
+  void setPageNo(int pageNo) {
+    if (_pageNum != pageNo && pageNo >= 0) {
+      _pageNum = pageNo;
+      notifyListeners();
+    }
+  }
+
+  // Set page size
+  void setPageSize(int pageSize) {
+    if (_pageSize != pageSize && pageSize > 0) {
+      _pageSize = pageSize;
+      // Reset to first page when page size changes
+      _pageNum = 0;
+      notifyListeners();
+    }
+  }
+
+  // Navigation methods
+  void nextPage() {
+    if (canGoNext) {
+      setPageNo(_pageNum + 1);
+    }
+  }
+
+  void previousPage() {
+    if (canGoPrevious) {
+      setPageNo(_pageNum - 1);
+    }
+  }
+
+  void goToPage(int page) {
+    if (page >= 0 && (totalPages == null || page < totalPages!)) {
+      setPageNo(page);
+    }
+  }
+
+  // Reset to first page
+  void reset() {
+    setPageNo(0);
+  }
+
+  // Trigger refresh (useful when param changes externally)
+  // This notifies listeners that they should refresh data
+  void triggerRefresh() {
+    _pageNum = 0; // Reset to first page
+    _totalCount = null; // Clear total count
+    _countNotifier.value = null;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _countNotifier.dispose();
+    super.dispose();
+  }
+}
+""";
+
 const int _typeList = 1;
-const int _typeRsList = 2;
 
 /// 网络接口生成器
 class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
@@ -133,7 +247,7 @@ var $name = $clsName(client: $client);
       }
 
       realRespType ??= innerRespTypeInterface;
-      respName = realRespType.getDisplayString();
+      respName = realRespType.getDisplayString(withNullability: false);
       
       String format = "";
       if (innerRespTypeInterface.getMethod("formatData") != null) {
@@ -178,9 +292,8 @@ var $name = $clsName(client: $client);
     final keyTypeString = keyType.isNotEmpty ? keyType : "int";
 
 
-    final String methodDisplayString = f.displayString();
-    final dynamic parameters = f.formalParameters;
-    final List paramsList = (parameters is List) ? parameters : [];
+    final String methodDisplayString = f.toString();
+    final List paramsList = (f.type as dynamic).parameters as List;
 
     final firstParam =
         paramsList.isNotEmpty ? paramsList[0].name : "null";
@@ -244,5 +357,127 @@ Builder networkBuilder(BuilderOptions options) {
   return SharedPartBuilder(
     [NetworkBuilder()],
     'network',
+  );
+}
+
+/// 自动生成 fetchData 的 Builder
+class FetchDataGenerator extends GeneratorForAnnotation<FetchData> {
+  @override
+  FutureOr<String> generateForAnnotatedElement(
+      Element element, ConstantReader annotation, BuildStep buildStep) async {
+    if (element is! ClassElement) {
+      return "";
+    }
+
+    final cls = element;
+    final fetchMethods = <String>[];
+
+    // 确保 pagination_controller.dart 在同级目录存在
+    await _ensurePaginationControllerExists(buildStep);
+
+    for (var method in cls.methods) {
+      final methodData = _processFetchMethod(method, cls);
+      if (methodData != null) {
+        fetchMethods.add(methodData);
+      }
+    }
+
+    if (fetchMethods.isEmpty) return "";
+
+    final fetchClsName = "${cls.name}Fetch";
+    final fileName = p.basename(buildStep.inputId.path);
+
+    return """
+import 'package:http_method/http_method.dart';
+import 'pagination_controller.dart';
+import '$fileName';
+
+class $fetchClsName {
+  ${fetchMethods.join("\n\n  ")}
+}
+""";
+  }
+
+  String? _processFetchMethod(MethodElement f, ClassElement cls) {
+    final returnType = f.returnType;
+    if (returnType is! InterfaceType) return null;
+    if (returnType.typeArguments.isEmpty) return null;
+
+    final respType = returnType.typeArguments[0];
+    if (respType is! InterfaceType) return null;
+    if (respType.typeArguments.isEmpty) return null;
+
+    final innerRespType = respType.typeArguments[0];
+    if (innerRespType is! InterfaceType) return null;
+
+    // 检查 innerRespType 是否包含 list 和 total 字段
+    final innerElement = innerRespType.element;
+
+    final listField = innerElement.getField('list');
+    final totalField = innerElement.getField('total');
+
+    if (listField == null || totalField == null) return null;
+
+    final listItemType = (listField.type as InterfaceType).typeArguments[0];
+    final parameters = (f.type as dynamic).parameters as List;
+    final reqType = parameters.isNotEmpty ? parameters[0].type : null;
+    if (reqType == null) return null;
+
+    final methodName = f.name;
+    
+    // 获取 DataInterface 的 name 属性作为 serviceInstanceName
+    String serviceInstanceName = "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Service";
+    final dataInterfaceChecker = TypeChecker.typeNamed(DataInterface);
+    final dataInterfaceAnnotation = dataInterfaceChecker.firstAnnotationOf(cls);
+    if (dataInterfaceAnnotation != null) {
+      final reader = ConstantReader(dataInterfaceAnnotation);
+      final nameValue = reader.read("name").stringValue;
+      if (nameValue.isNotEmpty) {
+        serviceInstanceName = nameValue;
+      } else {
+        serviceInstanceName = "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}";
+      }
+    }
+
+    return """
+  static Future<List<${listItemType.getDisplayString(withNullability: false)}>> $methodName(PaginationController<${reqType.getDisplayString(withNullability: false)}> controller) async {
+    final baseParam = controller.param;
+    // Assume baseParam has pageNum and pageSize fields based on the common pattern
+    try {
+      (baseParam as dynamic).pageNum = controller.pageNum;
+      (baseParam as dynamic).pageSize = controller.pageSize;
+    } catch (_) {
+      // If fields don't exist, ignore
+    }
+
+    final resp = await $serviceInstanceName.$methodName(baseParam);
+
+    if (resp.code == RespCode.SUCCESS && resp.obj != null) {
+      final obj = resp.obj!;
+      controller.setTotalCount(obj.total);
+      return obj.list;
+    } else {
+      throw Exception(resp.msg ?? "Failed to load data (code: \\\${resp.code})");
+    }
+  }""";
+  }
+
+  Future<void> _ensurePaginationControllerExists(BuildStep buildStep) async {
+    final inputId = buildStep.inputId;
+    final dir = p.dirname(inputId.path);
+    final pcPath = p.join(dir, 'pagination_controller.dart');
+
+    final pcFile = File(p.join(Directory.current.path, pcPath));
+    if (!await pcFile.exists()) {
+      await pcFile.writeAsString(_pcTemplate);
+    }
+  }
+}
+
+/// FetchBuilder 工厂方法
+Builder fetchBuilder(BuilderOptions options) {
+  return LibraryBuilder(
+    FetchDataGenerator(),
+    generatedExtension: '.fetch.gen.dart',
   );
 }

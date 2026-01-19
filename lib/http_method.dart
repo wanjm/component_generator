@@ -8,3 +8,4 @@ export 'src/http/http_buffer.dart';
 export 'src/http/parameter.dart';
 export 'src/http/log.dart';
 export 'src/generator/annotations.dart';
+export 'src/http/function.dart';

@@ -11,3 +11,7 @@ class ReqConfig {
   final String keyType;
   const ReqConfig(this.url, {this.method = "POST", this.keyType = ""});
 }
+
+class FetchData {
+  const FetchData();
+}

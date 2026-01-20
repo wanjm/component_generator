@@ -422,7 +422,6 @@ class FetchDataGenerator extends Generator {
 
     // 获取非空类型
     final innerElement = innerRespType.element;
-    if (innerElement is! InterfaceElement) return null;
 
     final listField = innerElement.getField('list');
     final totalField = innerElement.getField('total');
@@ -511,14 +510,86 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
     final i18nFunction = annotation.read("i18nFunction").stringValue;
 
     final cls = element;
-    final fileName = p.basename(buildStep.inputId.path);
 
+    // Detect if it's a TableContentWidget
+    InterfaceType? tItemType;
+    for (var type in cls.allSupertypes) {
+      if (type.element.name == 'TableContentWidget' &&
+          type.typeArguments.isNotEmpty) {
+        final t = type.typeArguments[0];
+        final element = t.element;
+        if (element is InterfaceElement) {
+          tItemType = element.thisType;
+        }
+        break;
+      }
+    }
+
+    if (tItemType != null) {
+      return _generateImplementationClass(
+          cls, tItemType, types, useI18n, i18nFunction);
+    }
+
+    return "";
+  }
+
+  String _generateImplementationClass(ClassElement cls, InterfaceType tItemType,
+      List<String> types, bool useI18n, String i18nFunction) {
+    final buffer = StringBuffer();
+    final implName = "${cls.name}Impl";
+    final tItemName = tItemType.getDisplayString(withNullability: false);
+
+    final hasPrivateConstructor =
+        cls.constructors.any((c) => c.isPrivate && c.name == '_');
+    final constructorCall = hasPrivateConstructor ? " : super._()" : "";
+
+    final hasGenTableHeader =
+        cls.methods.any((m) => m.name == 'genTableHeader' && !m.isAbstract);
+    final hasGenTableData =
+        cls.methods.any((m) => m.name == 'genTableData' && !m.isAbstract);
+
+    final parts = _getWidgetParts(tItemType.element, useI18n, i18nFunction,
+        methodProvider: cls, isItemContext: true);
+
+    buffer.writeln("class $implName extends ${cls.name} {");
+    buffer.writeln("  const $implName({super.key})$constructorCall;");
+    buffer.writeln();
+
+    if (!hasGenTableHeader && types.contains("table")) {
+      buffer.writeln("  @override");
+      buffer.writeln(
+          "  List<DataColumn> genTableHeader(BuildContext context) {");
+      buffer.writeln("    return [");
+      buffer.writeln("      ${parts.headers.join(",\n      ")}");
+      buffer.writeln("    ];");
+      buffer.writeln("  }");
+      buffer.writeln();
+    }
+
+    if (!hasGenTableData && types.contains("table")) {
+      buffer.writeln("  @override");
+      buffer.writeln(
+          "  List<DataCell> genTableData(BuildContext context, $tItemName item) {");
+      buffer.writeln("    return [");
+      buffer.writeln("      ${parts.cells.join(",\n      ")}");
+      buffer.writeln("    ];");
+      buffer.writeln("  }");
+    }
+
+    buffer.writeln("}");
+
+    return buffer.toString();
+  }
+
+  _WidgetParts _getWidgetParts(InterfaceElement cls, bool useI18n,
+      String i18nFunction,
+      {ClassElement? methodProvider, required bool isItemContext}) {
     final headers = <String>[];
     final cells = <String>[];
     final detailRows = <String>[];
-
     final tableFieldChecker = TypeChecker.typeNamed(TableField);
 
+    int index = 1;
     for (var field in cls.fields) {
       if (field.isStatic || field.isPrivate) continue;
 
@@ -555,60 +626,59 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
 
       headers.add("DataColumn(label: $columnLabel)");
 
-      String valueExpr = "Text(${field.name}.toString())";
-      if (field.type.isDartCoreInt || field.type.isDartCoreDouble) {
-        valueExpr = "Center(child: $valueExpr)";
-      }
-      cells.add("DataCell($valueExpr)");
+      String valueExpr;
+      final itemPrefix = isItemContext ? "item." : "";
 
-      // Detail row generation
+      // Check for custom cell methods: genNDataCell or genXXXDataCell
+      String? customCellMethod;
+      if (methodProvider != null) {
+        final nMethod = "gen${index}DataCell";
+        final fieldName = field.name ?? "";
+        final nameMethod = fieldName.isEmpty
+            ? ""
+            : "gen${fieldName[0].toUpperCase()}${fieldName.substring(1)}DataCell";
+
+        if (methodProvider.getMethod(nMethod) != null) {
+          customCellMethod = "$nMethod(context, item)";
+        } else if (nameMethod.isNotEmpty &&
+            methodProvider.getMethod(nameMethod) != null) {
+          customCellMethod = "$nameMethod(context, item)";
+        }
+      }
+
+      if (customCellMethod != null) {
+        valueExpr = customCellMethod;
+      } else {
+        String textExpr = "Text($itemPrefix${field.name}.toString())";
+        if (field.type.isDartCoreInt || field.type.isDartCoreDouble) {
+          textExpr = "Center(child: $textExpr)";
+        }
+        valueExpr = "DataCell($textExpr)";
+      }
+      cells.add(valueExpr);
+
       detailRows.add("""TableRow(children: [
         Padding(padding: const EdgeInsets.all(8.0), child: $columnLabel),
-        Padding(padding: const EdgeInsets.all(8.0), child: Text(${field.name}.toString())),
+        Padding(padding: const EdgeInsets.all(8.0), child: Text($itemPrefix${field.name}.toString())),
       ])""");
+
+      index++;
     }
-
-    final buffer = StringBuffer();
-    buffer.writeln("import 'package:flutter/material.dart';");
-    buffer.writeln("import '$fileName';");
-    buffer.writeln();
-    buffer.writeln("extension ${cls.name}WidgetExt on ${cls.name} {");
-
-    if (types.contains("table")) {
-      buffer.writeln("""
-  static List<DataColumn> getTableHeader() {
-    return [
-      ${headers.join(",\n      ")}
-    ];
+    return _WidgetParts(headers, cells, detailRows);
   }
+}
 
-  List<DataCell> getTableData() {
-    return [
-      ${cells.join(",\n      ")}
-    ];
-  }
-""");
-    }
-
-    if (types.contains("detail")) {
-      buffer.writeln("""
-  List<TableRow> getDetailRows() {
-    return [
-      ${detailRows.join(",\n        ")}
-    ];
-  }
-""");
-    }
-
-    buffer.writeln("}");
-    return buffer.toString();
-  }
+class _WidgetParts {
+  final List<String> headers;
+  final List<String> cells;
+  final List<String> detailRows;
+  _WidgetParts(this.headers, this.cells, this.detailRows);
 }
 
 /// WidgetBuilder 工厂方法
 Builder widgetBuilder(BuilderOptions options) {
-  return LibraryBuilder(
-    WidgetBuilder(),
-    generatedExtension: '.widget.gen.dart',
+  return SharedPartBuilder(
+    [WidgetBuilder()],
+    'widget',
   );
 }

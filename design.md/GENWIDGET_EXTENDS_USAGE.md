@@ -1,6 +1,6 @@
-# @GenWidget Extends Strategy Usage
+# @TableWidget Extends Strategy Usage
 
-The `@GenWidget` annotation can be used on classes that inherit from `TableContentWidget` to automatically generate table headers and data rows.
+The `@TableWidget` annotation can be used on classes that inherit from `TableContentWidget` to automatically generate table headers and data rows.
 
 ## 1. Define your Widget Class
 
@@ -14,7 +14,7 @@ import 'pagination_controller.dart';
 
 part 'user_list_page.g.dart';
 
-@GenWidget(["table"])
+@TableWidget(OrgBiz, "listOrg")
 class UserContentWidget extends TableContentWidget<UserInfo, UserReq> {
   const UserContentWidget({super.key});
 
@@ -86,4 +86,5 @@ class UserListPage extends StatelessWidget {
 - **Field Customization**: Use `@TableField(label: '...')` on your data class fields.
 - **Ignore Fields**: Use `@TableField(ignore: true)` to skip a column.
 - **Custom Cells**: Implement `genNDataCell` (where N is 1-based index) or `genFieldNameDataCell` in your widget class.
+
 

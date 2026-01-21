@@ -6,9 +6,8 @@ This document provides comprehensive usage examples for all annotations availabl
 
 1. [@DataInterface](#datainterface)
 2. [@ReqConfig](#reqconfig)
-3. [@FetchData](#fetchdata)
-4. [@GenWidget](#genwidget)
-5. [@TableField](#tablefield)
+3. [@TableWidget](#tablewidget)
+4. [@TableField](#tablefield)
 
 ---
 
@@ -186,9 +185,9 @@ Future<RespData<ListUserResp?>> listUser(LoginParams data) => getData(
 
 ---
 
-## @FetchData
+## Automatic Fetch Method Generation
 
-The `@FetchData` annotation marks a `@DataInterface` class to generate pagination-aware fetch methods. These methods work with `PaginationController` for list endpoints.
+`@DataInterface` automatically generates pagination-aware fetch methods for methods that return list responses. These methods work with `PaginationController` for list endpoints.
 
 ### Requirements
 
@@ -200,7 +199,6 @@ The `@FetchData` annotation marks a `@DataInterface` class to generate paginatio
 
 ```dart
 @DataInterface()
-@FetchData()
 abstract class Network {
   @ReqConfig("/user/list")
   Future<RespData<ListUserResp?>> listUser(LoginParams data);
@@ -283,62 +281,50 @@ class _StudentContentWidget extends TableContentWidget<StudentInfo, StudentReq> 
 
 ---
 
-## @GenWidget
+## @TableWidget
 
-The `@GenWidget` annotation generates Flutter widget helper methods for data classes, including table headers, table data cells, and detail rows.
+The `@TableWidget` annotation generates Flutter widget helper methods for table widgets. It is used on mixin classes that extend `TableContentWidget` to automatically generate table headers and data rows.
 
 ### Parameters
 
-- `types` (List<String>, required): List of widget types to generate. Options: `"table"`, `"detail"`.
+- `fetchClass` (Type, required): The fetch class type (e.g., `OrgBizFetch`).
+- `fetchMethod` (String, required): The name of the fetch method (e.g., `"listOrg"`).
 - `useI18n` (bool, optional): Whether to use internationalization. Defaults to `false`.
 - `i18nFunction` (String, optional): Name of the i18n function. Defaults to `"tr"`.
 
-### Basic Usage - Table Only
+### Basic Usage
 
 ```dart
-@GenWidget(['table'])
-class OrgInfo extends JSONParameter {
-  int id;
-  String shortname;
-  String name;
-  
-  // ... fromJson, toJson methods
-}
-```
-
-### Table and Detail
-
-```dart
-@GenWidget(['table', 'detail'])
-class OrgInfo extends JSONParameter {
-  int id;
-  String shortname;
-  String name;
-  
-  // ... fromJson, toJson methods
+@TableWidget(OrgBiz, "listOrg")
+mixin OrgContentMixin on TableContentWidget<OrgInfo, OrgReq> {
+  // Optional: Override specific cells
+  DataCell gen3DataCell(BuildContext context, OrgInfo item) {
+    return DataCell(IconButton(icon: Icon(Icons.edit), onPressed: () {}));
+  }
 }
 ```
 
 ### With Internationalization
 
 ```dart
-@GenWidget(['table', 'detail'], useI18n: true, i18nFunction: 'tr')
-class OrgInfo extends JSONParameter {
-  int id;
-  String shortname;
-  String name;
-  
-  // ... fromJson, toJson methods
+@TableWidget(OrgBiz, "listOrg", useI18n: true, i18nFunction: 'tr')
+mixin OrgContentMixin on TableContentWidget<OrgInfo, OrgReq> {
 }
 ```
 
 ### Generated Output
 
-For `@GenWidget(['table', 'detail'])`, the generator creates:
+For `@TableWidget`, the generator creates:
 
 ```dart
-extension OrgInfoWidgetExt on OrgInfo {
-  List<DataColumn> getTableHeader() {
+class OrgContentImpl extends TableContentWidget<OrgInfo, OrgReq> with OrgContentMixin {
+  const OrgContentImpl({super.key});
+
+  @override
+  Future<List<OrgInfo>> fetchData(PaginationController<OrgReq> controller) => OrgBizFetch.listOrg(controller);
+
+  @override
+  List<DataColumn> genTableHeader(BuildContext context) {
     return [
       DataColumn(label: const Text('id')),
       DataColumn(label: const Text('shortname')),
@@ -346,26 +332,12 @@ extension OrgInfoWidgetExt on OrgInfo {
     ];
   }
 
-  List<DataCell> getTableData() {
+  @override
+  List<DataCell> genTableData(BuildContext context, OrgInfo item) {
     return [
-      DataCell(Center(child: Text(id.toString()))),
-      DataCell(Text(shortname.toString())),
-      DataCell(Text(name.toString())),
-    ];
-  }
-
-  List<TableRow> getDetailRows() {
-    return [
-      TableRow(
-        children: [
-          Padding(padding: const EdgeInsets.all(8.0), child: const Text('id')),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(id.toString()),
-          ),
-        ],
-      ),
-      // ... more rows
+      DataCell(Center(child: Text(item.id.toString()))),
+      DataCell(Text(item.shortname.toString())),
+      DataCell(Text(item.name.toString())),
     ];
   }
 }
@@ -374,15 +346,9 @@ extension OrgInfoWidgetExt on OrgInfo {
 ### Usage in Flutter Widgets
 
 ```dart
-// Using table methods
-DataTable(
-  columns: orgInfo.getTableHeader(),
-  rows: [DataRow(cells: orgInfo.getTableData())],
-)
-
-// Using detail rows
-Table(
-  children: orgInfo.getDetailRows(),
+PaginatedView<OrgReq>(
+  initialParam: OrgReq(),
+  child: const OrgContentImpl(),
 )
 ```
 
@@ -390,7 +356,7 @@ Table(
 
 ## @TableField
 
-The `@TableField` annotation customizes how fields are displayed in generated widgets when using `@GenWidget`. It can be applied to individual fields in a class.
+The `@TableField` annotation customizes how fields are displayed in generated widgets when using `@TableWidget`. It can be applied to individual fields in a class.
 
 ### Parameters
 
@@ -401,7 +367,6 @@ The `@TableField` annotation customizes how fields are displayed in generated wi
 ### Basic Usage - Custom Label
 
 ```dart
-@GenWidget(['table'])
 class UserInfo extends JSONParameter {
   @TableField(label: 'User ID')
   int id;
@@ -414,12 +379,15 @@ class UserInfo extends JSONParameter {
   
   // ... other fields
 }
+
+@TableWidget(UserBiz, "listUser")
+mixin UserContentMixin on TableContentWidget<UserInfo, UserReq> {
+}
 ```
 
 ### With i18n Tags
 
 ```dart
-@GenWidget(['table', 'detail'], useI18n: true)
 class UserInfo extends JSONParameter {
   @TableField(tag: 'user.id')
   int id;
@@ -432,12 +400,15 @@ class UserInfo extends JSONParameter {
   
   // ... other fields
 }
+
+@TableWidget(UserBiz, "listUser", useI18n: true)
+mixin UserContentMixin on TableContentWidget<UserInfo, UserReq> {
+}
 ```
 
 ### Ignoring Fields
 
 ```dart
-@GenWidget(['table'])
 class UserInfo extends JSONParameter {
   int id;
   String name;
@@ -447,12 +418,15 @@ class UserInfo extends JSONParameter {
   
   // ... other fields
 }
+
+@TableWidget(UserBiz, "listUser")
+mixin UserContentMixin on TableContentWidget<UserInfo, UserReq> {
+}
 ```
 
 ### Combining Options
 
 ```dart
-@GenWidget(['table', 'detail'], useI18n: true)
 class ProductInfo extends JSONParameter {
   @TableField(label: 'Product ID', tag: 'product.id')
   int id;
@@ -464,6 +438,10 @@ class ProductInfo extends JSONParameter {
   String internalNotes; // Hidden from widgets
   
   // ... other fields
+}
+
+@TableWidget(ProductBiz, "listProduct", useI18n: true)
+mixin ProductContentMixin on TableContentWidget<ProductInfo, ProductReq> {
 }
 ```
 
@@ -574,7 +552,6 @@ abstract class StudentNBiz {
 }
 
 // Define widget-enabled data class
-@GenWidget(['table', 'detail'])
 class StudentInfo extends JSONParameter {
   @TableField(label: 'ID')
   int id;
@@ -599,13 +576,16 @@ class StudentInfo extends JSONParameter {
   
   // ... fromJson, toJson methods
 }
+
+@TableWidget(StudentNBiz, "listStudent")
+mixin StudentContentMixin on TableContentWidget<StudentInfo, StudentReq> {
+}
 ```
 
 This example demonstrates:
-- `@DataInterface` with custom service name
-- `@FetchData` for pagination support
+- `@DataInterface` with custom service name (automatically generates fetch methods for list responses)
 - `@ReqConfig` for HTTP endpoints
-- `@GenWidget` for Flutter widget generation
+- `@TableWidget` for Flutter widget generation
 - `@TableField` for customizing field display
 
 ---

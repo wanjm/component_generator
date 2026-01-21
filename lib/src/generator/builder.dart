@@ -508,11 +508,13 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
 
     final useI18n = annotation.read("useI18n").boolValue;
     final i18nFunction = annotation.read("i18nFunction").stringValue;
+    final fetchMethod = annotation.read("fetchMethod").stringValue;
 
     final cls = element;
 
     // Detect if it's a TableContentWidget
     InterfaceType? tItemType;
+    InterfaceType? tParamType;
     for (var type in cls.allSupertypes) {
       if (type.element.name == 'TableContentWidget' &&
           type.typeArguments.isNotEmpty) {
@@ -521,23 +523,28 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
         if (element is InterfaceElement) {
           tItemType = element.thisType;
         }
+        if (type.typeArguments.length > 1) {
+          final paramType = type.typeArguments[1];
+          tParamType = paramType as InterfaceType?;
+        }
         break;
       }
     }
 
     if (tItemType != null) {
       return _generateImplementationClass(
-          cls, tItemType, types, useI18n, i18nFunction);
+          cls, tItemType, tParamType, types, useI18n, i18nFunction, fetchMethod);
     }
 
     return "";
   }
 
   String _generateImplementationClass(ClassElement cls, InterfaceType tItemType,
-      List<String> types, bool useI18n, String i18nFunction) {
+      InterfaceType? tParamType, List<String> types, bool useI18n, String i18nFunction, String fetchMethod) {
     final buffer = StringBuffer();
     final implName = "${cls.name}Impl";
     final tItemName = tItemType.getDisplayString(withNullability: false);
+    final tParamName = tParamType?.getDisplayString(withNullability: false) ?? 'dynamic';
 
     final hasPrivateConstructor =
         cls.constructors.any((c) => c.isPrivate && c.name == '_');
@@ -547,6 +554,8 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
         cls.methods.any((m) => m.name == 'genTableHeader' && !m.isAbstract);
     final hasGenTableData =
         cls.methods.any((m) => m.name == 'genTableData' && !m.isAbstract);
+    final hasFetchData =
+        cls.methods.any((m) => m.name == 'fetchData' && !m.isAbstract);
 
     final parts = _getWidgetParts(tItemType.element, useI18n, i18nFunction,
         methodProvider: cls, isItemContext: true);
@@ -554,6 +563,13 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
     buffer.writeln("class $implName extends ${cls.name} {");
     buffer.writeln("  const $implName({super.key})$constructorCall;");
     buffer.writeln();
+
+    if (!hasFetchData && fetchMethod.isNotEmpty) {
+      buffer.writeln("  @override");
+      buffer.writeln(
+          "  Future<List<$tItemName>> fetchData(PaginationController<$tParamName> controller) => $fetchMethod(controller);");
+      buffer.writeln();
+    }
 
     if (!hasGenTableHeader && types.contains("table")) {
       buffer.writeln("  @override");
@@ -647,13 +663,32 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
       }
 
       if (customCellMethod != null) {
+        // Custom cell method takes highest priority
         valueExpr = customCellMethod;
       } else {
+        // Check for tap callbacks: onFieldNameTap
+        String? tapCallbackMethod;
+        if (methodProvider != null) {
+          final fieldName = field.name ?? "";
+          if (fieldName.isNotEmpty) {
+            final tapMethodName = "on${fieldName[0].toUpperCase()}${fieldName.substring(1)}Tap";
+            if (methodProvider.getMethod(tapMethodName) != null) {
+              tapCallbackMethod = tapMethodName;
+            }
+          }
+        }
+
         String textExpr = "Text($itemPrefix${field.name}.toString())";
         if (field.type.isDartCoreInt || field.type.isDartCoreDouble) {
           textExpr = "Center(child: $textExpr)";
         }
-        valueExpr = "DataCell($textExpr)";
+
+        if (tapCallbackMethod != null) {
+          // Use DataCell's onTap parameter if tap callback exists
+          valueExpr = "DataCell($textExpr, onTap: () => $tapCallbackMethod(context, item))";
+        } else {
+          valueExpr = "DataCell($textExpr)";
+        }
       }
       cells.add(valueExpr);
 

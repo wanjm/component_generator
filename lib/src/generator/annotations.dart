@@ -20,8 +20,9 @@ class GenWidget {
   final List<String> types;
   final bool useI18n;
   final String i18nFunction;
+  final String fetchMethod;
   const GenWidget(this.types,
-      {this.useI18n = false, this.i18nFunction = 'tr'});
+      {this.useI18n = false, this.i18nFunction = 'tr', this.fetchMethod = ''});
 }
 
 class TableField {

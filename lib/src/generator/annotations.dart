@@ -21,8 +21,14 @@ class GenWidget {
   final bool useI18n;
   final String i18nFunction;
   final String fetchMethod;
-  const GenWidget(this.types,
-      {this.useI18n = false, this.i18nFunction = 'tr', this.fetchMethod = ''});
+  final Type fetchClass;
+  const GenWidget(
+    this.types,
+    this.fetchClass,
+    this.fetchMethod, {
+    this.useI18n = false,
+    this.i18nFunction = 'tr',
+  });
 }
 
 class TableField {

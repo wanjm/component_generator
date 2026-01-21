@@ -143,14 +143,12 @@ const int _typeList = 1;
 /// 网络接口生成器
 class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
   // ignore: unused_field
-  final _formatter =
-      DartFormatter(languageVersion: DartFormatter.latestLanguageVersion);
+  final _formatter = DartFormatter(languageVersion: DartFormatter.latestLanguageVersion);
 
   static final Set<String> _myClientChecked = <String>{};
 
   @override
-  FutureOr<String> generateForAnnotatedElement(
-      Element element, ConstantReader annotation, BuildStep buildStep) async {
+  FutureOr<String> generateForAnnotatedElement(Element element, ConstantReader annotation, BuildStep buildStep) async {
     if (element is! ClassElement) {
       return "";
     }
@@ -196,7 +194,6 @@ var $name = $clsName(client: $client);
   }
 
   _MethodData? _processMethod(MethodElement f) {
-
     TypeChecker reqConfigChecker = TypeChecker.typeNamed(ReqConfig);
     final reqConfigAnnotation = reqConfigChecker.firstAnnotationOf(f);
     if (reqConfigAnnotation == null) return null;
@@ -212,11 +209,11 @@ var $name = $clsName(client: $client);
     if (respType.typeArguments.isEmpty) return null;
 
     final innerRespType = respType.typeArguments[0];
-    final noDetailData = innerRespType is VoidType|| innerRespType is DynamicType;
-    
-    String respName="";
+    final noDetailData = innerRespType is VoidType || innerRespType is DynamicType;
+
+    String respName = "";
     String formatCode;
-    
+
     if (noDetailData) {
       // Handle dynamic type - skip fromJson
       formatCode = "resp.obj = resp.res;";
@@ -232,23 +229,23 @@ var $name = $clsName(client: $client);
         if (innerRespTypeInterface.isDartCoreList) {
           realRespType = innerRespTypeInterface.typeArguments[0] as InterfaceType;
           resultType = _typeList;
-        // } else {
-        //   var superclass = innerRespType.superclass;
-        //   while (superclass != null && !superclass.isDartCoreObject) {
-        //     if (superclass.getDisplayString(withNullability: false) ==
-        //         "RSList<dynamic>") {
-        //       realRespType = innerRespType.typeArguments[0] as InterfaceType;
-        //       resultType = _typeRsList;
-        //       break;
-        //     }
-        //     superclass = superclass.superclass;
-        //   }
+          // } else {
+          //   var superclass = innerRespType.superclass;
+          //   while (superclass != null && !superclass.isDartCoreObject) {
+          //     if (superclass.getDisplayString(withNullability: false) ==
+          //         "RSList<dynamic>") {
+          //       realRespType = innerRespType.typeArguments[0] as InterfaceType;
+          //       resultType = _typeRsList;
+          //       break;
+          //     }
+          //     superclass = superclass.superclass;
+          //   }
         }
       }
 
       realRespType ??= innerRespTypeInterface;
       respName = realRespType.getDisplayString(withNullability: false);
-      
+
       String format = "";
       if (innerRespTypeInterface.getMethod("formatData") != null) {
         format = "a.formatData();";
@@ -291,14 +288,11 @@ var $name = $clsName(client: $client);
     final keyType = reader.peek("keyType")?.stringValue ?? "";
     final keyTypeString = keyType.isNotEmpty ? keyType : "int";
 
-
     final String methodDisplayString = f.toString();
     final List paramsList = (f.type as dynamic).parameters as List;
 
-    final firstParam =
-        paramsList.isNotEmpty ? paramsList[0].name : "null";
-    final secondParam =
-        paramsList.length > 1 ? (paramsList[1]).name : "false";
+    final firstParam = paramsList.isNotEmpty ? paramsList[0].name : "null";
+    final secondParam = paramsList.length > 1 ? (paramsList[1]).name : "false";
 
     final bufferString = noDetailData ? "" : "buffer: bufferMap[\"$url\"] as ClassBuffer<$keyTypeString, $respName>?,";
     final methodString = reqMethod != "POST" ? "method: \"$reqMethod\"," : "";
@@ -328,7 +322,7 @@ var $name = $clsName(client: $client);
       final sourcePath = buildStep.inputId.path;
       final sourceDir = p.dirname(sourcePath);
       final targetFile = File(p.join(sourceDir, 'myclient.dart'));
-      
+
       // 如果文件已存在，直接返回
       if (await targetFile.exists()) {
         return;
@@ -338,7 +332,7 @@ var $name = $clsName(client: $client);
       String templateContent = _myClientTemplate;
       // 确保目录存在
       await targetFile.parent.create(recursive: true);
-      
+
       // 复制模板内容到目标文件
       await targetFile.writeAsString(templateContent);
     } catch (e) {
@@ -366,8 +360,7 @@ Builder networkBuilder(BuilderOptions options) {
 class FetchDataGenerator extends Generator {
   @override
   FutureOr<String> generate(LibraryReader library, BuildStep buildStep) async {
-    final annotatedElements =
-        library.annotatedWith(TypeChecker.typeNamed(FetchData));
+    final annotatedElements = library.annotatedWith(TypeChecker.typeNamed(FetchData));
     if (annotatedElements.isEmpty) return "";
 
     // 确保 pagination_controller.dart 在同级目录存在
@@ -429,15 +422,14 @@ class FetchDataGenerator extends Generator {
     if (listField == null || totalField == null) return null;
 
     final listFieldType = listField.type;
-    if (listFieldType is! InterfaceType || listFieldType.typeArguments.isEmpty)
-      return null;
+    if (listFieldType is! InterfaceType || listFieldType.typeArguments.isEmpty) return null;
     final listItemType = listFieldType.typeArguments[0];
     final parameters = (f.type as dynamic).parameters as List;
     final reqType = parameters.isNotEmpty ? parameters[0].type : null;
     if (reqType == null) return null;
 
     final methodName = f.name;
-    
+
     // 获取 DataInterface 的 name 属性作为 serviceInstanceName
     String serviceInstanceName;
     final dataInterfaceChecker = TypeChecker.typeNamed(DataInterface);
@@ -450,7 +442,7 @@ class FetchDataGenerator extends Generator {
       } else {
         serviceInstanceName = "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Service";
       }
-    }else{
+    } else {
       return "";
     }
 
@@ -495,29 +487,39 @@ Builder fetchBuilder(BuilderOptions options) {
 /// 自动生成 Widget 相关代码的 Builder
 class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
   @override
-  FutureOr<String> generateForAnnotatedElement(
-      Element element, ConstantReader annotation, BuildStep buildStep) {
-    if (element is! ClassElement) return "";
+  FutureOr<String> generateForAnnotatedElement(Element element, ConstantReader annotation, BuildStep buildStep) {
+    if (element is! MixinElement) return "";
 
-    final types = annotation
-        .read("types")
-        .listValue
-        .map((e) => e.toStringValue() ?? "")
-        .toList();
+    final cls = element;
+    // GenWidget is now only supported on mixin-style helpers.
+    // We detect this by convention: the name ends with 'Mixin' and the
+    // mixin (class) is constrained on TableContentWidget in its supertypes.
+    if (cls.name == null || !cls.name!.endsWith('Mixin')) {
+      return "";
+    }
+
+    final types = annotation.read("types").listValue.map((e) => e.toStringValue() ?? "").toList();
     if (types.isEmpty) return "";
 
     final useI18n = annotation.read("useI18n").boolValue;
     final i18nFunction = annotation.read("i18nFunction").stringValue;
-    final fetchMethod = annotation.read("fetchMethod").stringValue;
 
-    final cls = element;
+    // Check for Type-based approach first (fetchClass + fetchMethodName)
+    String fetchMethod = '';
+    final fetchClassType = annotation.read("fetchClass").typeValue;
+    final fetchMethodName = annotation.read("fetchMethod").stringValue;
+    String className = '';
+      // Type-based approach: fetchClass: OrgBizFetch, fetchMethodName: "listOrg"
+    className = fetchClassType.getDisplayString(withNullability: false);
+    fetchMethod = "${className}Fetch.$fetchMethodName";
 
-    // Detect if it's a TableContentWidget
+    // Extract TableContentWidget<TItem, TParam> from constraints / supertypes
     InterfaceType? tItemType;
     InterfaceType? tParamType;
+
+    // Scan all supertypes for TableContentWidget
     for (var type in cls.allSupertypes) {
-      if (type.element.name == 'TableContentWidget' &&
-          type.typeArguments.isNotEmpty) {
+      if (type.element.name == 'TableContentWidget' && type.typeArguments.isNotEmpty) {
         final t = type.typeArguments[0];
         final element = t.element;
         if (element is InterfaceElement) {
@@ -531,36 +533,35 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
       }
     }
 
-    if (tItemType != null) {
-      return _generateImplementationClass(
-          cls, tItemType, tParamType, types, useI18n, i18nFunction, fetchMethod);
+    if (tItemType == null) {
+      return "";
     }
 
-    return "";
+    return _generateImplementationClass(cls, tItemType, tParamType, types, useI18n, i18nFunction, fetchMethod);
   }
 
-  String _generateImplementationClass(ClassElement cls, InterfaceType tItemType,
-      InterfaceType? tParamType, List<String> types, bool useI18n, String i18nFunction, String fetchMethod) {
+  String _generateImplementationClass(MixinElement cls, InterfaceType tItemType, InterfaceType? tParamType, List<String> types,
+      bool useI18n, String i18nFunction, String fetchMethod) {
     final buffer = StringBuffer();
-    final implName = "${cls.name}Impl";
+    // Derive class name from mixin: strip trailing 'Mixin' if present
+    final originalName = cls.name ?? '';
+    final baseName =
+        originalName.endsWith('Mixin') ? originalName.substring(0, originalName.length - 'Mixin'.length) : originalName;
+    final implName = baseName;
     final tItemName = tItemType.getDisplayString(withNullability: false);
     final tParamName = tParamType?.getDisplayString(withNullability: false) ?? 'dynamic';
 
-    final hasPrivateConstructor =
-        cls.constructors.any((c) => c.isPrivate && c.name == '_');
-    final constructorCall = hasPrivateConstructor ? " : super._()" : "";
+    // Mixins do not have constructors; always use a simple const constructor
+    const constructorCall = "";
 
-    final hasGenTableHeader =
-        cls.methods.any((m) => m.name == 'genTableHeader' && !m.isAbstract);
-    final hasGenTableData =
-        cls.methods.any((m) => m.name == 'genTableData' && !m.isAbstract);
-    final hasFetchData =
-        cls.methods.any((m) => m.name == 'fetchData' && !m.isAbstract);
+    final hasGenTableHeader = cls.methods.any((m) => m.name == 'genTableHeader' && !m.isAbstract);
+    final hasGenTableData = cls.methods.any((m) => m.name == 'genTableData' && !m.isAbstract);
+    final hasFetchData = cls.methods.any((m) => m.name == 'fetchData' && !m.isAbstract);
 
-    final parts = _getWidgetParts(tItemType.element, useI18n, i18nFunction,
-        methodProvider: cls, isItemContext: true);
+    final parts = _getWidgetParts(tItemType.element, useI18n, i18nFunction, methodProvider: cls, isItemContext: true);
 
-    buffer.writeln("class $implName extends ${cls.name} {");
+    // Generate class that extends TableContentWidget and mixes in the annotated mixin
+    buffer.writeln("class $implName extends TableContentWidget<$tItemName, $tParamName> with ${cls.name} {");
     buffer.writeln("  const $implName({super.key})$constructorCall;");
     buffer.writeln();
 
@@ -573,8 +574,7 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
 
     if (!hasGenTableHeader && types.contains("table")) {
       buffer.writeln("  @override");
-      buffer.writeln(
-          "  List<DataColumn> genTableHeader(BuildContext context) {");
+      buffer.writeln("  List<DataColumn> genTableHeader(BuildContext context) {");
       buffer.writeln("    return [");
       buffer.writeln("      ${parts.headers.join(",\n      ")}");
       buffer.writeln("    ];");
@@ -584,8 +584,7 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
 
     if (!hasGenTableData && types.contains("table")) {
       buffer.writeln("  @override");
-      buffer.writeln(
-          "  List<DataCell> genTableData(BuildContext context, $tItemName item) {");
+      buffer.writeln("  List<DataCell> genTableData(BuildContext context, $tItemName item) {");
       buffer.writeln("    return [");
       buffer.writeln("      ${parts.cells.join(",\n      ")}");
       buffer.writeln("    ];");
@@ -597,9 +596,8 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
     return buffer.toString();
   }
 
-  _WidgetParts _getWidgetParts(InterfaceElement cls, bool useI18n,
-      String i18nFunction,
-      {ClassElement? methodProvider, required bool isItemContext}) {
+  _WidgetParts _getWidgetParts(InterfaceElement cls, bool useI18n, String i18nFunction,
+      {MixinElement? methodProvider, required bool isItemContext}) {
     final headers = <String>[];
     final cells = <String>[];
     final detailRows = <String>[];
@@ -650,14 +648,11 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
       if (methodProvider != null) {
         final nMethod = "gen${index}DataCell";
         final fieldName = field.name ?? "";
-        final nameMethod = fieldName.isEmpty
-            ? ""
-            : "gen${fieldName[0].toUpperCase()}${fieldName.substring(1)}DataCell";
+        final nameMethod = fieldName.isEmpty ? "" : "gen${fieldName[0].toUpperCase()}${fieldName.substring(1)}DataCell";
 
         if (methodProvider.getMethod(nMethod) != null) {
           customCellMethod = "$nMethod(context, item)";
-        } else if (nameMethod.isNotEmpty &&
-            methodProvider.getMethod(nameMethod) != null) {
+        } else if (nameMethod.isNotEmpty && methodProvider.getMethod(nameMethod) != null) {
           customCellMethod = "$nameMethod(context, item)";
         }
       }

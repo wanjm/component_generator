@@ -12,18 +12,12 @@ class ReqConfig {
   const ReqConfig(this.url, {this.method = "POST", this.keyType = ""});
 }
 
-class FetchData {
-  const FetchData();
-}
-
-class GenWidget {
-  final List<String> types;
+class TableWidget {
   final bool useI18n;
   final String i18nFunction;
   final String fetchMethod;
   final Type fetchClass;
-  const GenWidget(
-    this.types,
+  const TableWidget(
     this.fetchClass,
     this.fetchMethod, {
     this.useI18n = false,

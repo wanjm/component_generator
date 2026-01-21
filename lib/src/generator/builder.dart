@@ -158,6 +158,8 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     if (!_myClientChecked.contains(package)) {
       _myClientChecked.add(package);
       await _ensureMyClientExists(buildStep, package);
+      // 确保 pagination_controller.dart 在同级目录存在
+      await _ensurePaginationControllerExists(buildStep);
     }
 
     final cls = element;
@@ -182,15 +184,34 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     final client = clientValue.isNotEmpty ? clientValue : "client";
     final name = nameValue.isNotEmpty ? nameValue : "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Service";
 
-    return """
-class $clsName extends BaseMethod $withMixin implements $ifName {
-  $clsName({super.client});
+    // Generate fetch methods for list responses
+    final fetchMethods = <String>[];
+    for (var methodElement in cls.methods) {
+      final fetchMethod = _processFetchMethod(methodElement, cls, name);
+      if (fetchMethod != null) {
+        fetchMethods.add(fetchMethod);
+      }
+    }
 
-  ${methods.join("\n\n  ")}
-}
+    final buffer = StringBuffer();
+    buffer.writeln("class $clsName extends BaseMethod $withMixin implements $ifName {");
+    buffer.writeln("  $clsName({super.client});");
+    buffer.writeln();
+    buffer.writeln("  ${methods.join("\n\n  ")}");
+    buffer.writeln("}");
+    buffer.writeln();
+    buffer.writeln("var $name = $clsName(client: $client);");
 
-var $name = $clsName(client: $client);
-""";
+    // Add fetch class if there are fetch methods
+    if (fetchMethods.isNotEmpty) {
+      final fetchClsName = "${cls.name}Fetch";
+      buffer.writeln();
+      buffer.writeln("class $fetchClsName {");
+      buffer.writeln("  ${fetchMethods.join("\n\n  ")}");
+      buffer.writeln("}");
+    }
+
+    return buffer.toString();
   }
 
   _MethodData? _processMethod(MethodElement f) {
@@ -340,68 +361,25 @@ var $name = $clsName(client: $client);
       // 用户需要手动创建 myclient.dart
     }
   }
-}
 
-class _MethodData {
-  final String implementation;
+  /// 确保 pagination_controller.dart 文件存在，如果不存在则从模板复制
+  Future<void> _ensurePaginationControllerExists(BuildStep buildStep) async {
+    try {
+      final inputId = buildStep.inputId;
+      final dir = p.dirname(inputId.path);
+      final pcPath = p.join(dir, 'pagination_controller.dart');
 
-  _MethodData(this.implementation);
-}
-
-/// Builder 工厂方法
-Builder networkBuilder(BuilderOptions options) {
-  return SharedPartBuilder(
-    [NetworkBuilder()],
-    'network',
-  );
-}
-
-/// 自动生成 fetchData 的 Builder
-class FetchDataGenerator extends Generator {
-  @override
-  FutureOr<String> generate(LibraryReader library, BuildStep buildStep) async {
-    final annotatedElements = library.annotatedWith(TypeChecker.typeNamed(FetchData));
-    if (annotatedElements.isEmpty) return "";
-
-    // 确保 pagination_controller.dart 在同级目录存在
-    await _ensurePaginationControllerExists(buildStep);
-
-    final fileName = p.basename(buildStep.inputId.path);
-    final buffer = StringBuffer();
-
-    buffer.writeln("import 'package:http_method/http_method.dart';");
-    buffer.writeln("import 'pagination_controller.dart';");
-    buffer.writeln("import 'schema.gen.dart';");
-    buffer.writeln("import '$fileName';");
-    buffer.writeln();
-
-    for (var annotatedElement in annotatedElements) {
-      final element = annotatedElement.element;
-      if (element is! ClassElement) continue;
-
-      final cls = element;
-      final fetchMethods = <String>[];
-
-      for (var method in cls.methods) {
-        final methodData = _processFetchMethod(method, cls);
-        if (methodData != null) {
-          fetchMethods.add(methodData);
-        }
+      final pcFile = File(p.join(Directory.current.path, pcPath));
+      if (!await pcFile.exists()) {
+        await pcFile.writeAsString(_pcTemplate);
       }
-
-      if (fetchMethods.isEmpty) continue;
-
-      final fetchClsName = "${cls.name}Fetch";
-      buffer.writeln("class $fetchClsName {");
-      buffer.writeln("  ${fetchMethods.join("\n\n  ")}");
-      buffer.writeln("}");
-      buffer.writeln();
+    } catch (e) {
+      // 如果文件操作失败，忽略错误
     }
-
-    return buffer.toString();
   }
 
-  String? _processFetchMethod(MethodElement f, ClassElement cls) {
+  /// Process a method to generate fetch method if it returns a list response
+  String? _processFetchMethod(MethodElement f, ClassElement cls, String serviceInstanceName) {
     final returnType = f.returnType;
     if (returnType is! InterfaceType) return null;
     if (returnType.typeArguments.isEmpty) return null;
@@ -430,22 +408,6 @@ class FetchDataGenerator extends Generator {
 
     final methodName = f.name;
 
-    // 获取 DataInterface 的 name 属性作为 serviceInstanceName
-    String serviceInstanceName;
-    final dataInterfaceChecker = TypeChecker.typeNamed(DataInterface);
-    final dataInterfaceAnnotation = dataInterfaceChecker.firstAnnotationOf(cls);
-    if (dataInterfaceAnnotation != null) {
-      final reader = ConstantReader(dataInterfaceAnnotation);
-      final nameValue = reader.read("name").stringValue;
-      if (nameValue.isNotEmpty) {
-        serviceInstanceName = nameValue;
-      } else {
-        serviceInstanceName = "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Service";
-      }
-    } else {
-      return "";
-    }
-
     return """
   static Future<List<${listItemType.getDisplayString(withNullability: false)}>> $methodName(PaginationController<${reqType.getDisplayString(withNullability: false)}> controller) async {
     final baseParam = controller.param;
@@ -463,44 +425,37 @@ class FetchDataGenerator extends Generator {
     }
   }""";
   }
-
-  Future<void> _ensurePaginationControllerExists(BuildStep buildStep) async {
-    final inputId = buildStep.inputId;
-    final dir = p.dirname(inputId.path);
-    final pcPath = p.join(dir, 'pagination_controller.dart');
-
-    final pcFile = File(p.join(Directory.current.path, pcPath));
-    if (!await pcFile.exists()) {
-      await pcFile.writeAsString(_pcTemplate);
-    }
-  }
 }
 
-/// FetchBuilder 工厂方法
-Builder fetchBuilder(BuilderOptions options) {
-  return LibraryBuilder(
-    FetchDataGenerator(),
-    generatedExtension: '.fetch.dart',
+class _MethodData {
+  final String implementation;
+
+  _MethodData(this.implementation);
+}
+
+/// Builder 工厂方法
+Builder networkBuilder(BuilderOptions options) {
+  return SharedPartBuilder(
+    [NetworkBuilder()],
+    'network',
   );
 }
 
 /// 自动生成 Widget 相关代码的 Builder
-class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
+class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
   @override
   FutureOr<String> generateForAnnotatedElement(Element element, ConstantReader annotation, BuildStep buildStep) {
     if (element is! MixinElement) return "";
 
     final cls = element;
-    // GenWidget is now only supported on mixin-style helpers.
+    // TableWidget is now only supported on mixin-style helpers.
     // We detect this by convention: the name ends with 'Mixin' and the
     // mixin (class) is constrained on TableContentWidget in its supertypes.
     if (cls.name == null || !cls.name!.endsWith('Mixin')) {
       return "";
     }
 
-    final types = annotation.read("types").listValue.map((e) => e.toStringValue() ?? "").toList();
-    if (types.isEmpty) return "";
-
+    // TableWidget always generates table widgets, no types parameter needed
     final useI18n = annotation.read("useI18n").boolValue;
     final i18nFunction = annotation.read("i18nFunction").stringValue;
 
@@ -537,10 +492,11 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
       return "";
     }
 
-    return _generateImplementationClass(cls, tItemType, tParamType, types, useI18n, i18nFunction, fetchMethod);
+    // TableWidget always generates table widgets
+    return _generateImplementationClass(cls, tItemType, tParamType, useI18n, i18nFunction, fetchMethod);
   }
 
-  String _generateImplementationClass(MixinElement cls, InterfaceType tItemType, InterfaceType? tParamType, List<String> types,
+  String _generateImplementationClass(MixinElement cls, InterfaceType tItemType, InterfaceType? tParamType,
       bool useI18n, String i18nFunction, String fetchMethod) {
     final buffer = StringBuffer();
     // Derive class name from mixin: strip trailing 'Mixin' if present
@@ -572,7 +528,8 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
       buffer.writeln();
     }
 
-    if (!hasGenTableHeader && types.contains("table")) {
+    // TableWidget always generates table widgets
+    if (!hasGenTableHeader) {
       buffer.writeln("  @override");
       buffer.writeln("  List<DataColumn> genTableHeader(BuildContext context) {");
       buffer.writeln("    return [");
@@ -582,7 +539,7 @@ class WidgetBuilder extends GeneratorForAnnotation<GenWidget> {
       buffer.writeln();
     }
 
-    if (!hasGenTableData && types.contains("table")) {
+    if (!hasGenTableData) {
       buffer.writeln("  @override");
       buffer.writeln("  List<DataCell> genTableData(BuildContext context, $tItemName item) {");
       buffer.writeln("    return [");

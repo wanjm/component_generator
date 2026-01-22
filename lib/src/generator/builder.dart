@@ -23,7 +23,6 @@ MyClient client = MyClient();
 var bufferMap = <String, ClassBuffer<dynamic, dynamic>>{};
 """;
 
-
 const int _typeList = 1;
 
 /// 网络接口生成器
@@ -79,7 +78,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     }
 
     final buffer = StringBuffer();
-    
+
     // Generate pagination controller interface and class only once per file
     final fileId = buildStep.inputId.path;
     if (!_paginationControllerGenerated.contains(fileId)) {
@@ -87,7 +86,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
       buffer.writeln(_generatePaginationController());
       buffer.writeln();
     }
-    
+
     buffer.writeln("class $clsName extends BaseMethod $withMixin implements $ifName {");
     buffer.writeln("  $clsName({super.client});");
     buffer.writeln();
@@ -330,6 +329,27 @@ Builder networkBuilder(BuilderOptions options) {
   );
 }
 
+/// Parameters for generating implementation class
+class _TableWidgetParams {
+  final InterfaceType tItemType;
+  final InterfaceType? tParamType;
+  final bool useI18n;
+  final String i18nFunction;
+  final String fetchMethod;
+  final List<String> columns;
+  final List<String> skips;
+
+  const _TableWidgetParams({
+    required this.tItemType,
+    this.tParamType,
+    required this.useI18n,
+    required this.i18nFunction,
+    required this.fetchMethod,
+    required this.columns,
+    required this.skips,
+  });
+}
+
 /// 自动生成 Widget 相关代码的 Builder
 class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
   @override
@@ -350,12 +370,27 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
 
     // Check for Type-based approach first (fetchClass + fetchMethodName)
     String fetchMethod = '';
-    final fetchClassType = annotation.read("fetchClass").typeValue;
-    final fetchMethodName = annotation.read("fetchMethod").stringValue;
-    String className = '';
+    final fetchClassType = annotation.peek("fetchClass")?.typeValue;
+    final fetchMethodName = annotation.peek("fetchMethod")?.stringValue ?? "";
+    if (fetchClassType != null && fetchMethodName.isNotEmpty) {
+      String className = '';
       // Type-based approach: fetchClass: OrgBizFetch, fetchMethodName: "listOrg"
-    className = fetchClassType.getDisplayString(withNullability: false);
-    fetchMethod = "${className}Fetch.$fetchMethodName";
+      className = fetchClassType.getDisplayString(withNullability: false);
+      fetchMethod = "${className}Fetch.$fetchMethodName";
+    }
+
+    // Read columns and skips parameters
+    List<String> columns = const [];
+    final columnsValue = annotation.peek("columns")?.listValue;
+    if (columnsValue != null) {
+      columns = columnsValue.map((e) => e.toStringValue() ?? "").where((e) => e.isNotEmpty).toList();
+    }
+
+    List<String> skips = const [];
+    final skipsValue = annotation.peek("skips")?.listValue;
+    if (skipsValue != null) {
+      skips = skipsValue.map((e) => e.toStringValue() ?? "").where((e) => e.isNotEmpty).toList();
+    }
 
     // Extract TableContentWidget<TItem, TParam> from constraints / supertypes
     InterfaceType? tItemType;
@@ -382,19 +417,27 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     }
 
     // TableWidget always generates table widgets
-    return _generateImplementationClass(cls, tItemType, tParamType, useI18n, i18nFunction, fetchMethod);
+    final params = _TableWidgetParams(
+      tItemType: tItemType,
+      tParamType: tParamType,
+      useI18n: useI18n,
+      i18nFunction: i18nFunction,
+      fetchMethod: fetchMethod,
+      columns: columns,
+      skips: skips,
+    );
+    return _generateImplementationClass(cls, params);
   }
 
-  String _generateImplementationClass(MixinElement cls, InterfaceType tItemType, InterfaceType? tParamType,
-      bool useI18n, String i18nFunction, String fetchMethod) {
+  String _generateImplementationClass(MixinElement cls, _TableWidgetParams params) {
     final buffer = StringBuffer();
     // Derive class name from mixin: strip trailing 'Mixin' if present
     final originalName = cls.name ?? '';
     final baseName =
         originalName.endsWith('Mixin') ? originalName.substring(0, originalName.length - 'Mixin'.length) : originalName;
     final implName = baseName;
-    final tItemName = tItemType.getDisplayString(withNullability: false);
-    final tParamName = tParamType?.getDisplayString(withNullability: false) ?? 'dynamic';
+    final tItemName = params.tItemType.getDisplayString(withNullability: false);
+    final tParamName = params.tParamType?.getDisplayString(withNullability: false) ?? 'dynamic';
 
     // Mixins do not have constructors; always use a simple const constructor
     const constructorCall = "";
@@ -403,17 +446,18 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     final hasGenTableData = cls.methods.any((m) => m.name == 'genTableData' && !m.isAbstract);
     final hasFetchData = cls.methods.any((m) => m.name == 'fetchData' && !m.isAbstract);
 
-    final parts = _getWidgetParts(tItemType.element, useI18n, i18nFunction, methodProvider: cls, isItemContext: true);
+    final parts = _getWidgetParts(params.tItemType.element, params.useI18n, params.i18nFunction,
+        methodProvider: cls, isItemContext: true, columns: params.columns, skips: params.skips);
 
     // Generate class that extends TableContentWidget and mixes in the annotated mixin
     buffer.writeln("class $implName extends TableContentWidget<$tItemName, $tParamName> with ${cls.name} {");
     buffer.writeln("  const $implName({super.key})$constructorCall;");
     buffer.writeln();
 
-    if (!hasFetchData && fetchMethod.isNotEmpty) {
+    if (!hasFetchData && params.fetchMethod.isNotEmpty) {
       buffer.writeln("  @override");
       buffer.writeln(
-          "  Future<List<$tItemName>> fetchData(PaginationController<$tParamName> controller) => $fetchMethod(controller);");
+          "  Future<List<$tItemName>> fetchData(PaginationController<$tParamName> controller) => ${params.fetchMethod}(controller);");
       buffer.writeln();
     }
 
@@ -443,103 +487,91 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
   }
 
   _WidgetParts _getWidgetParts(InterfaceElement cls, bool useI18n, String i18nFunction,
-      {MixinElement? methodProvider, required bool isItemContext}) {
+      {required MixinElement methodProvider,
+      required bool isItemContext,
+      List<String> columns = const [],
+      List<String> skips = const []}) {
     final headers = <String>[];
     final cells = <String>[];
     final detailRows = <String>[];
-    final tableFieldChecker = TypeChecker.typeNamed(TableField);
 
-    int index = 1;
-    for (var field in cls.fields) {
-      if (field.isStatic || field.isPrivate) continue;
-
-      final fieldAnnotation = tableFieldChecker.firstAnnotationOf(field);
-      String? fieldLabel;
-      String? fieldTag;
-      bool fieldIgnore = false;
-
-      if (fieldAnnotation != null) {
-        final reader = ConstantReader(fieldAnnotation);
-        fieldLabel = reader.peek("label")?.stringValue;
-        fieldTag = reader.peek("tag")?.stringValue;
-        fieldIgnore = reader.peek("ignore")?.boolValue ?? false;
+    // 1. if columns exist, just use it; 2. if not we init columns by class fields and skips; and gen the field map;
+    List<String> columnNames;
+    if (columns.isNotEmpty) {
+      // Use specified columns
+      columnNames = columns;
+    } else {
+      // Initialize columns by class fields and skips
+      columnNames = [];
+      final skipSet = <String>{'id'};
+      if (skips.isNotEmpty) {
+        skipSet.addAll(skips);
       }
-
-      if (fieldIgnore) continue;
-
-      String columnLabel;
-      if (fieldLabel != null) {
-        columnLabel = "const Text('$fieldLabel')";
-      } else if (fieldTag != null) {
-        columnLabel = "Text($i18nFunction('$fieldTag'))";
-      } else if (useI18n) {
-        columnLabel = "Text($i18nFunction('${cls.name}.${field.name}'))";
-      } else {
-        String label = field.documentationComment ?? "";
-        label = label.replaceAll(RegExp(r'^///\s*'), '').trim();
-        if (label.isNotEmpty) {
-          label = label.split(RegExp(r'\s+')).first;
+      for (var field in cls.fields) {
+        if (field.isStatic || field.isPrivate || field.name == null) continue;
+        if (!skipSet.contains(field.name!)) {
+          columnNames.add(field.name!);
         }
-        if (label.isEmpty) label = field.name ?? "";
-        columnLabel = "const Text('$label')";
       }
+    }
 
+    // Generate field map for quick lookup
+    final fieldMap = <String, FieldElement>{};
+    for (var field in cls.fields) {
+      if (!field.isStatic && !field.isPrivate && field.name != null) {
+        fieldMap[field.name!] = field;
+      }
+    }
+
+    // 3. for each column gen the headers & datacell;
+    for (var columnName in columnNames) {
+      // Generate header
+      String columnLabel;
+      if (useI18n) {
+        columnLabel = "Text($i18nFunction('$columnName'))";
+      } else {
+        columnLabel = "const Text('$columnName')";
+      }
       headers.add("DataColumn(label: $columnLabel)");
 
+      // 4. for datacell;
       String valueExpr;
-      final itemPrefix = isItemContext ? "item." : "";
+      final field = fieldMap[columnName];
 
-      // Check for custom cell methods: genNDataCell or genXXXDataCell
-      String? customCellMethod;
-      if (methodProvider != null) {
-        final nMethod = "gen${index}DataCell";
-        final fieldName = field.name ?? "";
-        final nameMethod = fieldName.isEmpty ? "" : "gen${fieldName[0].toUpperCase()}${fieldName.substring(1)}DataCell";
-
-        if (methodProvider.getMethod(nMethod) != null) {
-          customCellMethod = "$nMethod(context, item)";
-        } else if (nameMethod.isNotEmpty && methodProvider.getMethod(nameMethod) != null) {
-          customCellMethod = "$nameMethod(context, item)";
-        }
-      }
-
-      if (customCellMethod != null) {
-        // Custom cell method takes highest priority
-        valueExpr = customCellMethod;
+      final capitalizedName = columnName.isEmpty ? "" : "${columnName[0].toUpperCase()}${columnName.substring(1)}";
+      final customMethodName = "gen${capitalizedName}DataCell";
+      if (field == null) {
+        // - if column not in field, gen genXXXDataCell;
+        valueExpr = "$customMethodName(context, item)";
       } else {
-        // Check for tap callbacks: onFieldNameTap
-        String? tapCallbackMethod;
-        if (methodProvider != null) {
-          final fieldName = field.name ?? "";
-          if (fieldName.isNotEmpty) {
-            final tapMethodName = "on${fieldName[0].toUpperCase()}${fieldName.substring(1)}Tap";
-            if (methodProvider.getMethod(tapMethodName) != null) {
-              tapCallbackMethod = tapMethodName;
-            }
+        // - else if genXXXDataCell exist call genXXXDataCell
+        if (methodProvider.getMethod(customMethodName) != null) {
+          valueExpr = "$customMethodName(context, item)";
+        } else {
+          // Generate DataCell with onTap
+          final itemPrefix = isItemContext ? "item." : "";
+          String textExpr = "Text($itemPrefix${field.name}.toString())";
+          if (field.type.isDartCoreInt || field.type.isDartCoreDouble) {
+            textExpr = "Center(child: $textExpr)";
+          }
+          // - else if onXXXTap, gen DataCell with it as onTap;
+          final tapMethodName = "on${capitalizedName}Tap";
+          if (methodProvider.getMethod(tapMethodName) != null) {
+            valueExpr = "DataCell($textExpr, onTap: () => $tapMethodName(context, item))";
+          } else {
+            valueExpr = "DataCell($textExpr)";
           }
         }
-
-        String textExpr = "Text($itemPrefix${field.name}.toString())";
-        if (field.type.isDartCoreInt || field.type.isDartCoreDouble) {
-          textExpr = "Center(child: $textExpr)";
-        }
-
-        if (tapCallbackMethod != null) {
-          // Use DataCell's onTap parameter if tap callback exists
-          valueExpr = "DataCell($textExpr, onTap: () => $tapCallbackMethod(context, item))";
-        } else {
-          valueExpr = "DataCell($textExpr)";
-        }
       }
+
       cells.add(valueExpr);
 
       detailRows.add("""TableRow(children: [
         Padding(padding: const EdgeInsets.all(8.0), child: $columnLabel),
-        Padding(padding: const EdgeInsets.all(8.0), child: Text($itemPrefix${field.name}.toString())),
+        Padding(padding: const EdgeInsets.all(8.0), child: const SizedBox.shrink()),
       ])""");
-
-      index++;
     }
+
     return _WidgetParts(headers, cells, detailRows);
   }
 }

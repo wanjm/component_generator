@@ -13,10 +13,11 @@ builders:
     build_to: cache
     applies_builders: ["source_gen|combining_builder"]
 
-  fetchBuilder:
+  widgetBuilder:
     import: "package:http_method/src/generator/builder.dart"
-    builder_factories: ["fetchBuilder"]
-    build_extensions: {".dart": [".fetch.gen.dart"]}
+    builder_factories: ["widgetBuilder"]
+    build_extensions: {".dart": [".widget.g.part"]}
     auto_apply: dependents
-    build_to: source
+    build_to: cache
+    applies_builders: ["source_gen|combining_builder"]
 

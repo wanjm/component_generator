@@ -17,6 +17,16 @@ class NetworkImpl extends BaseMethod implements Network {
           resp.obj = resp.res;
         },
       );
+
+  @override
+  Future<RespData<ListUserResp?>> listUser(LoginParams data) => getData(
+        data: data,
+        url: "/user/list",
+        buffer: bufferMap["/user/list"] as ClassBuffer<int, ListUserResp>?,
+        encodeDataFunction: (RespData resp) {
+          resp.obj = ListUserResp.fromJson(resp.res);
+        },
+      );
 }
 
-var network = NetworkImpl(client: client);
+var networkService = NetworkImpl(client: client);

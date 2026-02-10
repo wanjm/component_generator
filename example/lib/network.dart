@@ -7,4 +7,7 @@ part 'network.g.dart';
 abstract class Network {
   @ReqConfig("/user/login")
   Future<RespData> login(LoginParams data);
+
+  @ReqConfig("/user/list")
+  Future<RespData<ListUserResp?>> listUser(LoginParams data);
 }

@@ -23,134 +23,18 @@ MyClient client = MyClient();
 var bufferMap = <String, ClassBuffer<dynamic, dynamic>>{};
 """;
 
-const String _pcTemplate = """import 'package:flutter/foundation.dart';
-
-class PaginationController<T> extends ChangeNotifier {
-  int _pageNum;
-  int _pageSize;
-  T _param;
-  int? _totalCount;
-  
-  // Separate notifier for count changes
-  final ValueNotifier<int?> _countNotifier = ValueNotifier<int?>(null);
-
-  PaginationController({
-    int initialPageNo = 0,
-    int initialPageSize = 10,
-    required T initialParam,
-  })  : _pageNum = initialPageNo,
-        _pageSize = initialPageSize,
-        _param = initialParam;
-
-  // Getters
-  int get pageNum => _pageNum;
-  int get pageSize => _pageSize;
-  T get param => _param;
-  int? get totalCount => _totalCount;
-  
-  // Getter for count notifier (for listening to count changes)
-  ValueNotifier<int?> get countNotifier => _countNotifier;
-
-  // Calculate total pages (pageCount)
-  int? get pageCount {
-    if (_totalCount == null) return null;
-    return (_totalCount! / _pageSize).ceil();
-  }
-  
-  // Alias for backward compatibility
-  int? get totalPages => pageCount;
-
-  // Check if can go to next/previous page
-  bool get canGoNext {
-    if (_totalCount == null || pageCount == null) return false;
-    return _pageNum < pageCount! - 1;
-  }
-
-  bool get canGoPrevious => _pageNum > 0;
-
-  // Set total count (called by content widget after fetching data)
-  void setTotalCount(int total) {
-    if (_totalCount != total) {
-      _totalCount = total;
-      // Notify count notifier
-      _countNotifier.value = total;
-      // Also notify main listeners (for pageNo/pageSize changes)
-      notifyListeners();
-    }
-  }
-
-  // Set page number
-  void setPageNo(int pageNo) {
-    if (_pageNum != pageNo && pageNo >= 0) {
-      _pageNum = pageNo;
-      notifyListeners();
-    }
-  }
-
-  // Set page size
-  void setPageSize(int pageSize) {
-    if (_pageSize != pageSize && pageSize > 0) {
-      _pageSize = pageSize;
-      // Reset to first page when page size changes
-      _pageNum = 0;
-      notifyListeners();
-    }
-  }
-
-  // Navigation methods
-  void nextPage() {
-    if (canGoNext) {
-      setPageNo(_pageNum + 1);
-    }
-  }
-
-  void previousPage() {
-    if (canGoPrevious) {
-      setPageNo(_pageNum - 1);
-    }
-  }
-
-  void goToPage(int page) {
-    if (page >= 0 && (totalPages == null || page < totalPages!)) {
-      setPageNo(page);
-    }
-  }
-
-  // Reset to first page
-  void reset() {
-    setPageNo(0);
-  }
-
-  // Trigger refresh (useful when param changes externally)
-  // This notifies listeners that they should refresh data
-  void triggerRefresh() {
-    _pageNum = 0; // Reset to first page
-    _totalCount = null; // Clear total count
-    _countNotifier.value = null;
-    notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _countNotifier.dispose();
-    super.dispose();
-  }
-}
-""";
-
 const int _typeList = 1;
 
 /// 网络接口生成器
 class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
   // ignore: unused_field
-  final _formatter =
-      DartFormatter(languageVersion: DartFormatter.latestLanguageVersion);
+  final _formatter = DartFormatter(languageVersion: DartFormatter.latestLanguageVersion);
 
   static final Set<String> _myClientChecked = <String>{};
+  static final Set<String> _paginationControllerGenerated = <String>{};
 
   @override
-  FutureOr<String> generateForAnnotatedElement(
-      Element element, ConstantReader annotation, BuildStep buildStep) async {
+  FutureOr<String> generateForAnnotatedElement(Element element, ConstantReader annotation, BuildStep buildStep) async {
     if (element is! ClassElement) {
       return "";
     }
@@ -182,21 +66,48 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     final clientValue = annotation.read("client").stringValue;
     final nameValue = annotation.read("name").stringValue;
     final client = clientValue.isNotEmpty ? clientValue : "client";
-    final name = nameValue.isNotEmpty ? nameValue : (cls.name!.isEmpty ? cls.name! : cls.name![0].toLowerCase() + cls.name!.substring(1));
+    final name = nameValue.isNotEmpty ? nameValue : "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Service";
 
-    return """
-class $clsName extends BaseMethod $withMixin implements $ifName {
-  $clsName({super.client});
+    // Generate fetch methods for list responses
+    final fetchMethods = <String>[];
+    for (var methodElement in cls.methods) {
+      final fetchMethod = _processFetchMethod(methodElement, cls, name);
+      if (fetchMethod != null) {
+        fetchMethods.add(fetchMethod);
+      }
+    }
 
-  ${methods.join("\n\n  ")}
-}
+    final buffer = StringBuffer();
 
-var $name = $clsName(client: $client);
-""";
+    // Generate pagination controller interface and class only once per file
+    final fileId = buildStep.inputId.path;
+    if (!_paginationControllerGenerated.contains(fileId)) {
+      _paginationControllerGenerated.add(fileId);
+      buffer.writeln(_generatePaginationController());
+      buffer.writeln();
+    }
+
+    buffer.writeln("class $clsName extends BaseMethod $withMixin implements $ifName {");
+    buffer.writeln("  $clsName({super.client});");
+    buffer.writeln();
+    buffer.writeln("  ${methods.join("\n\n  ")}");
+    buffer.writeln("}");
+    buffer.writeln();
+    buffer.writeln("var $name = $clsName(client: $client);");
+
+    // Add fetch class if there are fetch methods
+    if (fetchMethods.isNotEmpty) {
+      final fetchClsName = "${cls.name}Fetch";
+      buffer.writeln();
+      buffer.writeln("class $fetchClsName {");
+      buffer.writeln("  ${fetchMethods.join("\n\n  ")}");
+      buffer.writeln("}");
+    }
+
+    return buffer.toString();
   }
 
   _MethodData? _processMethod(MethodElement f) {
-
     TypeChecker reqConfigChecker = TypeChecker.typeNamed(ReqConfig);
     final reqConfigAnnotation = reqConfigChecker.firstAnnotationOf(f);
     if (reqConfigAnnotation == null) return null;
@@ -212,12 +123,12 @@ var $name = $clsName(client: $client);
     if (respType.typeArguments.isEmpty) return null;
 
     final innerRespType = respType.typeArguments[0];
-    final isDynamic = innerRespType is DynamicType;
-    
-    String respName="";
+    final noDetailData = innerRespType is VoidType || innerRespType is DynamicType;
+
+    String respName = "";
     String formatCode;
-    
-    if (isDynamic) {
+
+    if (noDetailData) {
       // Handle dynamic type - skip fromJson
       formatCode = "resp.obj = resp.res;";
     } else {
@@ -232,23 +143,23 @@ var $name = $clsName(client: $client);
         if (innerRespTypeInterface.isDartCoreList) {
           realRespType = innerRespTypeInterface.typeArguments[0] as InterfaceType;
           resultType = _typeList;
-        // } else {
-        //   var superclass = innerRespType.superclass;
-        //   while (superclass != null && !superclass.isDartCoreObject) {
-        //     if (superclass.getDisplayString(withNullability: false) ==
-        //         "RSList<dynamic>") {
-        //       realRespType = innerRespType.typeArguments[0] as InterfaceType;
-        //       resultType = _typeRsList;
-        //       break;
-        //     }
-        //     superclass = superclass.superclass;
-        //   }
+          // } else {
+          //   var superclass = innerRespType.superclass;
+          //   while (superclass != null && !superclass.isDartCoreObject) {
+          //     if (superclass.getDisplayString(withNullability: false) ==
+          //         "RSList<dynamic>") {
+          //       realRespType = innerRespType.typeArguments[0] as InterfaceType;
+          //       resultType = _typeRsList;
+          //       break;
+          //     }
+          //     superclass = superclass.superclass;
+          //   }
         }
       }
 
       realRespType ??= innerRespTypeInterface;
       respName = realRespType.getDisplayString(withNullability: false);
-      
+
       String format = "";
       if (innerRespTypeInterface.getMethod("formatData") != null) {
         format = "a.formatData();";
@@ -291,16 +202,13 @@ var $name = $clsName(client: $client);
     final keyType = reader.peek("keyType")?.stringValue ?? "";
     final keyTypeString = keyType.isNotEmpty ? keyType : "int";
 
-
     final String methodDisplayString = f.toString();
     final List paramsList = (f.type as dynamic).parameters as List;
 
-    final firstParam =
-        paramsList.isNotEmpty ? paramsList[0].name : "null";
-    final secondParam =
-        paramsList.length > 1 ? (paramsList[1]).name : "false";
+    final firstParam = paramsList.isNotEmpty ? paramsList[0].name : "null";
+    final secondParam = paramsList.length > 1 ? (paramsList[1]).name : "false";
 
-    final bufferString = isDynamic ? "" : "buffer: bufferMap[\"$url\"] as ClassBuffer<$keyTypeString, $respName>?,";
+    final bufferString = noDetailData ? "" : "buffer: bufferMap[\"$url\"] as ClassBuffer<$keyTypeString, $respName>?,";
     final methodString = reqMethod != "POST" ? "method: \"$reqMethod\"," : "";
     final slientString = secondParam != "false" ? "slient: $secondParam," : "";
 
@@ -324,9 +232,11 @@ var $name = $clsName(client: $client);
   Future<void> _ensureMyClientExists(BuildStep buildStep, String package) async {
     try {
       // 使用文件系统操作：检查目标文件是否存在
-      final currentDir = Directory.current.path;
-      final targetFile = File(p.join(currentDir, 'lib', 'myclient.dart'));
-      
+      // 获取源文件所在的目录（与 .g.dart 文件相同的目录）
+      final sourcePath = buildStep.inputId.path;
+      final sourceDir = p.dirname(sourcePath);
+      final targetFile = File(p.join(sourceDir, 'myclient.dart'));
+
       // 如果文件已存在，直接返回
       if (await targetFile.exists()) {
         return;
@@ -336,13 +246,72 @@ var $name = $clsName(client: $client);
       String templateContent = _myClientTemplate;
       // 确保目录存在
       await targetFile.parent.create(recursive: true);
-      
+
       // 复制模板内容到目标文件
       await targetFile.writeAsString(templateContent);
     } catch (e) {
       // 如果文件操作失败，忽略错误
       // 用户需要手动创建 myclient.dart
     }
+  }
+
+  /// Generate pagination controller interface and implementation
+  String _generatePaginationController() {
+    return """abstract class IPaginationController<T> {
+  T get param;
+  int get pageNum;
+  int get pageSize;
+  void setTotalCount(int total);
+}
+""";
+  }
+
+  /// Process a method to generate fetch method if it returns a list response
+  String? _processFetchMethod(MethodElement f, ClassElement cls, String serviceInstanceName) {
+    final returnType = f.returnType;
+    if (returnType is! InterfaceType) return null;
+    if (returnType.typeArguments.isEmpty) return null;
+
+    final respType = returnType.typeArguments[0];
+    if (respType is! InterfaceType) return null;
+    if (respType.typeArguments.isEmpty) return null;
+
+    var innerRespType = respType.typeArguments[0];
+    if (innerRespType is! InterfaceType) return null;
+
+    // 获取非空类型
+    final innerElement = innerRespType.element;
+
+    final listField = innerElement.getField('list');
+    final totalField = innerElement.getField('total');
+
+    if (listField == null || totalField == null) return null;
+
+    final listFieldType = listField.type;
+    if (listFieldType is! InterfaceType || listFieldType.typeArguments.isEmpty) return null;
+    final listItemType = listFieldType.typeArguments[0];
+    final parameters = (f.type as dynamic).parameters as List;
+    final reqType = parameters.isNotEmpty ? parameters[0].type : null;
+    if (reqType == null) return null;
+
+    final methodName = f.name;
+
+    return """
+  static Future<List<${listItemType.getDisplayString(withNullability: false)}>> $methodName(IPaginationController<${reqType.getDisplayString(withNullability: false)}> controller) async {
+    final baseParam = controller.param;
+    baseParam.pageNum = controller.pageNum;
+    baseParam.pageSize = controller.pageSize;
+
+    final resp = await $serviceInstanceName.$methodName(baseParam);
+
+    if (resp.code == RespCode.SUCCESS && resp.obj != null) {
+      final obj = resp.obj!;
+      controller.setTotalCount(obj.total);
+      return obj.list;
+    } else {
+      throw Exception(resp.msg ?? "Failed to load data (code: \\\${resp.code})");
+    }
+  }""";
   }
 }
 
@@ -360,124 +329,264 @@ Builder networkBuilder(BuilderOptions options) {
   );
 }
 
-/// 自动生成 fetchData 的 Builder
-class FetchDataGenerator extends GeneratorForAnnotation<FetchData> {
+/// Parameters for generating implementation class
+class _TableWidgetParams {
+  final InterfaceType tItemType;
+  final InterfaceType? tParamType;
+  final bool useI18n;
+  final String i18nFunction;
+  final String fetchMethod;
+  final List<String> columns;
+  final List<String> skips;
+
+  const _TableWidgetParams({
+    required this.tItemType,
+    this.tParamType,
+    required this.useI18n,
+    required this.i18nFunction,
+    required this.fetchMethod,
+    required this.columns,
+    required this.skips,
+  });
+}
+
+/// 自动生成 Widget 相关代码的 Builder
+class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
   @override
-  FutureOr<String> generateForAnnotatedElement(
-      Element element, ConstantReader annotation, BuildStep buildStep) async {
-    if (element is! ClassElement) {
+  FutureOr<String> generateForAnnotatedElement(Element element, ConstantReader annotation, BuildStep buildStep) {
+    if (element is! MixinElement) return "";
+
+    final cls = element;
+    // TableWidget is now only supported on mixin-style helpers.
+    // We detect this by convention: the name ends with 'Mixin' and the
+    // mixin (class) is constrained on TableContentWidget in its supertypes.
+    if (cls.name == null || !cls.name!.endsWith('Mixin')) {
       return "";
     }
 
-    final cls = element;
-    final fetchMethods = <String>[];
+    // TableWidget always generates table widgets, no types parameter needed
+    final useI18n = annotation.read("useI18n").boolValue;
+    final i18nFunction = annotation.read("i18nFunction").stringValue;
 
-    // 确保 pagination_controller.dart 在同级目录存在
-    await _ensurePaginationControllerExists(buildStep);
+    // Check for Type-based approach first (fetchClass + fetchMethodName)
+    String fetchMethod = '';
+    final fetchClassType = annotation.peek("fetchClass")?.typeValue;
+    final fetchMethodName = annotation.peek("fetchMethod")?.stringValue ?? "";
+    if (fetchClassType != null && fetchMethodName.isNotEmpty) {
+      String className = '';
+      // Type-based approach: fetchClass: OrgBizFetch, fetchMethodName: "listOrg"
+      className = fetchClassType.getDisplayString(withNullability: false);
+      fetchMethod = "${className}Fetch.$fetchMethodName";
+    }
 
-    for (var method in cls.methods) {
-      final methodData = _processFetchMethod(method, cls);
-      if (methodData != null) {
-        fetchMethods.add(methodData);
+    // Read columns and skips parameters
+    List<String> columns = const [];
+    final columnsValue = annotation.peek("columns")?.listValue;
+    if (columnsValue != null) {
+      columns = columnsValue.map((e) => e.toStringValue() ?? "").where((e) => e.isNotEmpty).toList();
+    }
+
+    List<String> skips = const [];
+    final skipsValue = annotation.peek("skips")?.listValue;
+    if (skipsValue != null) {
+      skips = skipsValue.map((e) => e.toStringValue() ?? "").where((e) => e.isNotEmpty).toList();
+    }
+
+    // Extract TableContentWidget<TItem, TParam> from constraints / supertypes
+    InterfaceType? tItemType;
+    InterfaceType? tParamType;
+
+    // Scan all supertypes for TableContentWidget
+    for (var type in cls.allSupertypes) {
+      if (type.element.name == 'TableContentWidget' && type.typeArguments.isNotEmpty) {
+        final t = type.typeArguments[0];
+        final element = t.element;
+        if (element is InterfaceElement) {
+          tItemType = element.thisType;
+        }
+        if (type.typeArguments.length > 1) {
+          final paramType = type.typeArguments[1];
+          tParamType = paramType as InterfaceType?;
+        }
+        break;
       }
     }
 
-    if (fetchMethods.isEmpty) return "";
+    if (tItemType == null) {
+      return "";
+    }
 
-    final fetchClsName = "${cls.name}Fetch";
-    final fileName = p.basename(buildStep.inputId.path);
-
-    return """
-import 'package:http_method/http_method.dart';
-import 'pagination_controller.dart';
-import '$fileName';
-
-class $fetchClsName {
-  ${fetchMethods.join("\n\n  ")}
-}
-""";
+    // TableWidget always generates table widgets
+    final params = _TableWidgetParams(
+      tItemType: tItemType,
+      tParamType: tParamType,
+      useI18n: useI18n,
+      i18nFunction: i18nFunction,
+      fetchMethod: fetchMethod,
+      columns: columns,
+      skips: skips,
+    );
+    return _generateImplementationClass(cls, params);
   }
 
-  String? _processFetchMethod(MethodElement f, ClassElement cls) {
-    final returnType = f.returnType;
-    if (returnType is! InterfaceType) return null;
-    if (returnType.typeArguments.isEmpty) return null;
+  String _generateImplementationClass(MixinElement cls, _TableWidgetParams params) {
+    final buffer = StringBuffer();
+    // Derive class name from mixin: strip trailing 'Mixin' if present
+    final originalName = cls.name ?? '';
+    final baseName =
+        originalName.endsWith('Mixin') ? originalName.substring(0, originalName.length - 'Mixin'.length) : originalName;
+    final implName = baseName;
+    final tItemName = params.tItemType.getDisplayString(withNullability: false);
+    final tParamName = params.tParamType?.getDisplayString(withNullability: false) ?? 'dynamic';
 
-    final respType = returnType.typeArguments[0];
-    if (respType is! InterfaceType) return null;
-    if (respType.typeArguments.isEmpty) return null;
+    // Mixins do not have constructors; always use a simple const constructor
+    const constructorCall = "";
 
-    final innerRespType = respType.typeArguments[0];
-    if (innerRespType is! InterfaceType) return null;
+    final hasGenTableHeader = cls.methods.any((m) => m.name == 'genTableHeader' && !m.isAbstract);
+    final hasGenTableData = cls.methods.any((m) => m.name == 'genTableData' && !m.isAbstract);
+    final hasFetchData = cls.methods.any((m) => m.name == 'fetchData' && !m.isAbstract);
 
-    // 检查 innerRespType 是否包含 list 和 total 字段
-    final innerElement = innerRespType.element;
+    final parts = _getWidgetParts(params.tItemType.element, params.useI18n, params.i18nFunction,
+        methodProvider: cls, isItemContext: true, columns: params.columns, skips: params.skips);
 
-    final listField = innerElement.getField('list');
-    final totalField = innerElement.getField('total');
+    // Generate class that extends TableContentWidget and mixes in the annotated mixin
+    buffer.writeln("class $implName extends TableContentWidget<$tItemName, $tParamName> with ${cls.name} {");
+    buffer.writeln("  const $implName({super.key})$constructorCall;");
+    buffer.writeln();
 
-    if (listField == null || totalField == null) return null;
-
-    final listItemType = (listField.type as InterfaceType).typeArguments[0];
-    final parameters = (f.type as dynamic).parameters as List;
-    final reqType = parameters.isNotEmpty ? parameters[0].type : null;
-    if (reqType == null) return null;
-
-    final methodName = f.name;
-    
-    // 获取 DataInterface 的 name 属性作为 serviceInstanceName
-    String serviceInstanceName = "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Service";
-    final dataInterfaceChecker = TypeChecker.typeNamed(DataInterface);
-    final dataInterfaceAnnotation = dataInterfaceChecker.firstAnnotationOf(cls);
-    if (dataInterfaceAnnotation != null) {
-      final reader = ConstantReader(dataInterfaceAnnotation);
-      final nameValue = reader.read("name").stringValue;
-      if (nameValue.isNotEmpty) {
-        serviceInstanceName = nameValue;
-      } else {
-        serviceInstanceName = "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}";
-      }
+    if (!hasFetchData && params.fetchMethod.isNotEmpty) {
+      buffer.writeln("  @override");
+      buffer.writeln(
+          "  Future<List<$tItemName>> fetchData(PaginationController<$tParamName> controller) => ${params.fetchMethod}(controller);");
+      buffer.writeln();
     }
 
-    return """
-  static Future<List<${listItemType.getDisplayString(withNullability: false)}>> $methodName(PaginationController<${reqType.getDisplayString(withNullability: false)}> controller) async {
-    final baseParam = controller.param;
-    // Assume baseParam has pageNum and pageSize fields based on the common pattern
-    try {
-      (baseParam as dynamic).pageNum = controller.pageNum;
-      (baseParam as dynamic).pageSize = controller.pageSize;
-    } catch (_) {
-      // If fields don't exist, ignore
+    // TableWidget always generates table widgets
+    if (!hasGenTableHeader) {
+      buffer.writeln("  @override");
+      buffer.writeln("  List<DataColumn> genTableHeader(BuildContext context) {");
+      buffer.writeln("    return [");
+      buffer.writeln("      ${parts.headers.join(",\n      ")}");
+      buffer.writeln("    ];");
+      buffer.writeln("  }");
+      buffer.writeln();
     }
 
-    final resp = await $serviceInstanceName.$methodName(baseParam);
+    if (!hasGenTableData) {
+      buffer.writeln("  @override");
+      buffer.writeln("  List<DataCell> genTableData(BuildContext context, $tItemName item) {");
+      buffer.writeln("    return [");
+      buffer.writeln("      ${parts.cells.join(",\n      ")}");
+      buffer.writeln("    ];");
+      buffer.writeln("  }");
+    }
 
-    if (resp.code == RespCode.SUCCESS && resp.obj != null) {
-      final obj = resp.obj!;
-      controller.setTotalCount(obj.total);
-      return obj.list;
+    buffer.writeln("}");
+
+    return buffer.toString();
+  }
+
+  _WidgetParts _getWidgetParts(InterfaceElement cls, bool useI18n, String i18nFunction,
+      {required MixinElement methodProvider,
+      required bool isItemContext,
+      List<String> columns = const [],
+      List<String> skips = const []}) {
+    final headers = <String>[];
+    final cells = <String>[];
+    final detailRows = <String>[];
+
+    // 1. if columns exist, just use it; 2. if not we init columns by class fields and skips; and gen the field map;
+    List<String> columnNames;
+    if (columns.isNotEmpty) {
+      // Use specified columns
+      columnNames = columns;
     } else {
-      throw Exception(resp.msg ?? "Failed to load data (code: \\\${resp.code})");
+      // Initialize columns by class fields and skips
+      columnNames = [];
+      final skipSet = <String>{'id'};
+      if (skips.isNotEmpty) {
+        skipSet.addAll(skips);
+      }
+      for (var field in cls.fields) {
+        if (field.isStatic || field.isPrivate || field.name == null) continue;
+        if (!skipSet.contains(field.name!)) {
+          columnNames.add(field.name!);
+        }
+      }
     }
-  }""";
-  }
 
-  Future<void> _ensurePaginationControllerExists(BuildStep buildStep) async {
-    final inputId = buildStep.inputId;
-    final dir = p.dirname(inputId.path);
-    final pcPath = p.join(dir, 'pagination_controller.dart');
-
-    final pcFile = File(p.join(Directory.current.path, pcPath));
-    if (!await pcFile.exists()) {
-      await pcFile.writeAsString(_pcTemplate);
+    // Generate field map for quick lookup
+    final fieldMap = <String, FieldElement>{};
+    for (var field in cls.fields) {
+      if (!field.isStatic && !field.isPrivate && field.name != null) {
+        fieldMap[field.name!] = field;
+      }
     }
+
+    // 3. for each column gen the headers & datacell;
+    for (var columnName in columnNames) {
+      // Generate header
+      String columnLabel;
+      if (useI18n) {
+        columnLabel = "Text($i18nFunction('$columnName'))";
+      } else {
+        columnLabel = "const Text('$columnName')";
+      }
+      headers.add("DataColumn(label: $columnLabel)");
+
+      // 4. for datacell;
+      String valueExpr;
+      final field = fieldMap[columnName];
+
+      final capitalizedName = columnName.isEmpty ? "" : "${columnName[0].toUpperCase()}${columnName.substring(1)}";
+      final customMethodName = "gen${capitalizedName}DataCell";
+      if (field == null) {
+        // - if column not in field, gen genXXXDataCell;
+        valueExpr = "$customMethodName(context, item)";
+      } else {
+        // - else if genXXXDataCell exist call genXXXDataCell
+        if (methodProvider.getMethod(customMethodName) != null) {
+          valueExpr = "$customMethodName(context, item)";
+        } else {
+          // Generate DataCell with onTap
+          final itemPrefix = isItemContext ? "item." : "";
+          String textExpr = "Text($itemPrefix${field.name}.toString())";
+          if (field.type.isDartCoreInt || field.type.isDartCoreDouble) {
+            textExpr = "Center(child: $textExpr)";
+          }
+          // - else if onXXXTap, gen DataCell with it as onTap;
+          final tapMethodName = "on${capitalizedName}Tap";
+          if (methodProvider.getMethod(tapMethodName) != null) {
+            valueExpr = "DataCell($textExpr, onTap: () => $tapMethodName(context, item))";
+          } else {
+            valueExpr = "DataCell($textExpr)";
+          }
+        }
+      }
+
+      cells.add(valueExpr);
+
+      detailRows.add("""TableRow(children: [
+        Padding(padding: const EdgeInsets.all(8.0), child: $columnLabel),
+        Padding(padding: const EdgeInsets.all(8.0), child: const SizedBox.shrink()),
+      ])""");
+    }
+
+    return _WidgetParts(headers, cells, detailRows);
   }
 }
 
-/// FetchBuilder 工厂方法
-Builder fetchBuilder(BuilderOptions options) {
-  return LibraryBuilder(
-    FetchDataGenerator(),
-    generatedExtension: '.fetch.gen.dart',
+class _WidgetParts {
+  final List<String> headers;
+  final List<String> cells;
+  final List<String> detailRows;
+  _WidgetParts(this.headers, this.cells, this.detailRows);
+}
+
+/// WidgetBuilder 工厂方法
+Builder widgetBuilder(BuilderOptions options) {
+  return SharedPartBuilder(
+    [WidgetBuilder()],
+    'widget',
   );
 }

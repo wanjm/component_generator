@@ -19,11 +19,13 @@ abstract class HttpClientBase extends HttpClient {
   Future<Response?> sendReq(String url, ReqInfo params, String method) async {
     var body = params.content;
     var headers = getHeaders();
-    headers["content-type"] = params.contentType!;
+    if (params.contentType.isNotEmpty) {
+      headers["content-type"] = params.contentType;
+    }
 //    {"content-type": "application/json"};
     String requestLog =
         'PlasoHttp1Client@sendReq:\nRequest url: ${_prefix + url}\nRequest header: $headers';
-    if (!params.contentType!.contains('multipart/form-data')) {
+    if (!params.contentType.contains('multipart/form-data')) {
       requestLog += '\nRequest params: $body';
     }
     log.debug(requestLog, null);

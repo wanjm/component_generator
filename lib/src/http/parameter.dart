@@ -7,18 +7,18 @@ const String JSONTYPE = "application/json; charset=utf-8";
 const String URLENCODED = "application/x-www-form-urlencoded; charset=utf-8";
 
 class ReqInfo {
-  String? contentType;
+  String contentType;
   dynamic get content => _content;
   final dynamic _content;
   List<String>? urlParameters;
-  ReqInfo({this.contentType, dynamic content = "", this.urlParameters})
+  ReqInfo({this.contentType="", dynamic content = "", this.urlParameters})
       : assert(content is String || content is List<int>),
         _content = content;
 }
 
 class JsonReqInfo extends ReqInfo {
   JsonReqInfo({
-    String? contentType,
+    String contentType="",
     Map<String, dynamic>? content,
     List<String>? urlParameters,
   }) : super(

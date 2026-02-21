@@ -9,17 +9,16 @@ import 'parameter.dart';
 
 abstract class HttpClientBase extends HttpClient {
   late String _prefix;
-  HttpClientBase() : super();
+  HttpClientBase({super.timeout});
   @override
   set prefix(String prefix) {
     _prefix = prefix;
   }
 
   @override
-  Map<String, dynamic> standardData(String url,  jsonMap) {
+  Map<String, dynamic> standardData(String url, jsonMap) {
     return jsonMap;
   }
-
 
   @override
   Future<Response?> sendReq(String url, ReqInfo params, String method) async {
@@ -40,7 +39,7 @@ abstract class HttpClientBase extends HttpClient {
       try {
         response = await http
             .post(Uri.parse(_prefix + url), headers: headers, body: body)
-            .timeout(Duration(seconds: 30));
+            .timeout(timeout);
       } catch (e) {
         return null;
       }
@@ -50,7 +49,7 @@ abstract class HttpClientBase extends HttpClient {
       try {
         response = await http
             .get(Uri.parse(_prefix + url), headers: headers)
-            .timeout(Duration(seconds: 30));
+            .timeout(timeout);
       } catch (e) {
         return null;
       }

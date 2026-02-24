@@ -62,7 +62,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     final methods = <String>[];
 
     for (var methodElement in cls.methods) {
-      final methodData = _processMethod(methodElement);
+      final methodData = _processMethod(methodElement,ifName!);
       if (methodData != null) {
         methods.add(methodData.implementation);
       }
@@ -118,7 +118,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
   /// Returns the URL expression for generated code: variable name (e.g. loginUrl)
   /// when the annotation uses a constant reference, or quoted string when literal.
   String _getUrlExpression(
-      MethodElement f, ConstantReader reader, TypeChecker reqConfigChecker) {
+      MethodElement f, ConstantReader reader, TypeChecker reqConfigChecker, String ifName) {
     final stringValue = reader.read("url").stringValue;
     final session = f.session;
     final library = f.library;
@@ -149,7 +149,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
         // content is the source code;
         if (content != null) {
           // get the variable name from the source code;
-          return content.substring(firstArg.offset, firstArg.end);
+          return "$ifName.${content.substring(firstArg.offset, firstArg.end)}";
         }
       }
       break;
@@ -157,13 +157,13 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     return '"$stringValue"';
   }
 
-  _MethodData? _processMethod(MethodElement f) {
+  _MethodData? _processMethod(MethodElement f, String ifName) {
     TypeChecker reqConfigChecker = TypeChecker.typeNamed(ReqConfig);
     final reqConfigAnnotation = reqConfigChecker.firstAnnotationOf(f);
     if (reqConfigAnnotation == null) return null;
 
     final reader = ConstantReader(reqConfigAnnotation);
-    final urlExpr = _getUrlExpression(f, reader, reqConfigChecker);
+    final urlExpr = _getUrlExpression(f, reader, reqConfigChecker, ifName);
     final returnType = f.returnType;
     if (returnType is! InterfaceType) return null;
     if (returnType.typeArguments.isEmpty) return null;

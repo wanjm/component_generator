@@ -97,7 +97,10 @@ class ClassBuffer<KT, VT> {
 
 class IdBuffer<KT, VT> extends ClassBuffer<KT, VT> {}
 
-abstract class ArrayBuffer<KT, VT> extends ClassBuffer<KT, VT> {
+
+
+// 将单个请求合并和一个group发送出去；
+abstract class GroupBuffer<KT, VT> extends ClassBuffer<KT, VT> {
   Timer? timer;
   Completer<RespData<VT>>? a;
   List<Parameter> waitParam = [];
@@ -160,7 +163,7 @@ abstract class ArrayBuffer<KT, VT> extends ClassBuffer<KT, VT> {
   }
 }
 
-class IdsBuffer<KT, T extends IdParameter> extends ArrayBuffer<KT, T> {
+class IdsBuffer<KT, T extends IdParameter> extends GroupBuffer<KT, T> {
   @override
   Map<String, dynamic> getParameter(List<Parameter> ps) {
     var a = <String, dynamic>{};

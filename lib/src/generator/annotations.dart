@@ -15,13 +15,9 @@ class ReqConfig {
 class TableWidget {
   final bool useI18n;
   final String i18nFunction;
-  final String fetchMethod;
-  final Type? fetchClass;
   final List<String> columns;
   final List<String> skips;
   const TableWidget({
-    this.fetchClass,
-    this.fetchMethod = "",
     this.useI18n = false,
     this.i18nFunction = 'tr',
     this.columns = const [],

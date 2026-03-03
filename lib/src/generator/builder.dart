@@ -490,12 +490,14 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
   String _generateImplementationClass(
       MixinElement cls, _TableWidgetParams params) {
     final buffer = StringBuffer();
-    // Derive class name from mixin: strip trailing 'Mixin' if present
+    // Derive class name from mixin: strip trailing 'Mixin' if present,
+    // and strip leading '_' so the generated class is public
     final originalName = cls.name ?? '';
     final baseName = originalName.endsWith('Mixin')
         ? originalName.substring(0, originalName.length - 'Mixin'.length)
         : originalName;
-    final implName = baseName;
+    final implName =
+        baseName.startsWith('_') ? baseName.substring(1) : baseName;
     final tItemName = params.tItemType.getDisplayString(withNullability: false);
     final tParamName =
         params.tParamType?.getDisplayString(withNullability: false) ??

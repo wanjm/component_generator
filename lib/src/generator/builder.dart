@@ -35,7 +35,6 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
       DartFormatter(languageVersion: DartFormatter.latestLanguageVersion);
 
   static final Set<String> _myClientChecked = <String>{};
-  static final Set<String> _paginationControllerGenerated = <String>{};
 
   @override
   FutureOr<String> generateForAnnotatedElement(
@@ -85,14 +84,6 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     }
 
     final buffer = StringBuffer();
-
-    // Generate pagination controller interface and class only once per file
-    final fileId = buildStep.inputId.path;
-    if (!_paginationControllerGenerated.contains(fileId)) {
-      _paginationControllerGenerated.add(fileId);
-      buffer.writeln(_generatePaginationController());
-      buffer.writeln();
-    }
 
     buffer.writeln(
         "class $clsName extends BaseMethod $withMixin implements $ifName {");
@@ -315,17 +306,6 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
       // 如果文件操作失败，忽略错误
       // 用户需要手动创建 myclient.dart
     }
-  }
-
-  /// Generate pagination controller interface and implementation
-  String _generatePaginationController() {
-    return """abstract class IPaginationController<T> {
-  T get param;
-  int get pageNum;
-  int get pageSize;
-  void setTotalCount(int total);
-}
-""";
   }
 
   /// Process a method to generate fetch method if it returns a list response

@@ -503,7 +503,7 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     buffer.writeln(
         "class $implName extends TableContentWidget<$tItemName, $tParamName> with ${cls.name} {");
     buffer.writeln(
-        "  const $implName({super.key, required super.data})$constructorCall;");
+        "  const $implName({super.key, required super.items})$constructorCall;");
     buffer.writeln();
 
     // TableWidget always generates table widgets

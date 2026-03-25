@@ -376,7 +376,6 @@ Builder networkBuilder(BuilderOptions options) {
 /// Parameters for generating implementation class
 class _TableWidgetParams {
   final InterfaceType tItemType;
-  final InterfaceType? tParamType;
   final bool useI18n;
   final String i18nFunction;
   final List<String> columns;
@@ -384,7 +383,6 @@ class _TableWidgetParams {
 
   const _TableWidgetParams({
     required this.tItemType,
-    this.tParamType,
     required this.useI18n,
     required this.i18nFunction,
     required this.columns,
@@ -430,9 +428,8 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
           .toList();
     }
 
-    // Extract TableContentWidget<TItem, TParam> from constraints / supertypes
+    // Extract TableContentWidget<TItem> from constraints / supertypes
     InterfaceType? tItemType;
-    InterfaceType? tParamType;
 
     // Scan all supertypes for TableContentWidget
     for (var type in cls.allSupertypes) {
@@ -442,10 +439,6 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
         final element = t.element;
         if (element is InterfaceElement) {
           tItemType = element.thisType;
-        }
-        if (type.typeArguments.length > 1) {
-          final paramType = type.typeArguments[1];
-          tParamType = paramType as InterfaceType?;
         }
         break;
       }
@@ -458,7 +451,6 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     // TableWidget always generates table widgets
     final params = _TableWidgetParams(
       tItemType: tItemType,
-      tParamType: tParamType,
       useI18n: useI18n,
       i18nFunction: i18nFunction,
       columns: columns,
@@ -479,9 +471,6 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     final implName =
         baseName.startsWith('_') ? baseName.substring(1) : baseName;
     final tItemName = params.tItemType.getDisplayString(withNullability: false);
-    final tParamName =
-        params.tParamType?.getDisplayString(withNullability: false) ??
-            'dynamic';
 
     // Mixins do not have constructors; always use a simple const constructor
     const constructorCall = "";
@@ -501,7 +490,7 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     // Generate class that extends TableContentWidget and mixes in the annotated mixin.
     // The TableContentWidget now only renders data; fetching is handled by PaginatedView.
     buffer.writeln(
-        "class $implName extends TableContentWidget<$tItemName, $tParamName> with ${cls.name} {");
+        "class $implName extends TableContentWidget<$tItemName> with ${cls.name} {");
     buffer.writeln(
         "  const $implName({super.key, required super.items})$constructorCall;");
     buffer.writeln();

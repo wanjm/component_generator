@@ -51,7 +51,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     }
 
     final cls = element;
-    final clsName = "${cls.name}Impl";
+    final clsName = "${cls.name}Api";
     final ifName = cls.name;
     var withMixin = annotation.read("mixins").stringValue;
     if (withMixin.isNotEmpty) {
@@ -72,12 +72,12 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     final client = clientValue.isNotEmpty ? clientValue : "client";
     final name = nameValue.isNotEmpty
         ? nameValue
-        : "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Service";
+        : "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Api";
 
     // Generate fetch methods for list responses
     final fetchMethods = <String>[];
     for (var methodElement in cls.methods) {
-      final fetchMethod = _processFetchMethod(methodElement, cls, name);
+      final fetchMethod = _processFetchMethod(methodElement, cls);
       if (fetchMethod != null) {
         fetchMethods.add(fetchMethod);
       }
@@ -90,23 +90,13 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     buffer.writeln("  $clsName({required super.client});");
     buffer.writeln();
     buffer.writeln("  ${methods.join("\n\n  ")}");
+    if (fetchMethods.isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln("  ${fetchMethods.join("\n\n  ")}");
+    }
     buffer.writeln("}");
     buffer.writeln();
     buffer.writeln("var $name = $clsName(client: $client);");
-
-    // Add fetch class if there are fetch methods
-    if (fetchMethods.isNotEmpty) {
-      final fetchClsName = "${cls.name}Fetch";
-      // instance name, e.g. OrgBiz -> orgBizFetch
-      final fetchInstanceName =
-          "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Fetch";
-      buffer.writeln();
-      buffer.writeln("class $fetchClsName {");
-      buffer.writeln("  ${fetchMethods.join("\n\n  ")}");
-      buffer.writeln("}");
-      buffer.writeln();
-      buffer.writeln("final $fetchInstanceName = $fetchClsName();");
-    }
 
     return buffer.toString();
   }
@@ -310,7 +300,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
 
   /// Process a method to generate fetch method if it returns a list response
   String? _processFetchMethod(
-      MethodElement f, ClassElement cls, String serviceInstanceName) {
+      MethodElement f, ClassElement cls) {
     final returnType = f.returnType;
     if (returnType is! InterfaceType) return null;
     if (returnType.typeArguments.isEmpty) return null;
@@ -339,14 +329,15 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     if (reqType == null) return null;
 
     final methodName = f.name;
+    final fetchMethodName = "${methodName}Fetch";
 
     return """
-  Future<List<${listItemType.getDisplayString(withNullability: false)}>> $methodName(IPaginationController<${reqType.getDisplayString(withNullability: false)}> controller) async {
+  Future<List<${listItemType.getDisplayString(withNullability: false)}>> $fetchMethodName(IPaginationController<${reqType.getDisplayString(withNullability: false)}> controller) async {
     final baseParam = controller.param;
     baseParam.pageNum = controller.pageNum;
     baseParam.pageSize = controller.pageSize;
 
-    final resp = await $serviceInstanceName.$methodName(baseParam);
+    final resp = await $methodName(baseParam);
 
     if (resp.code == RespCode.SUCCESS && resp.obj != null) {
       final obj = resp.obj!;

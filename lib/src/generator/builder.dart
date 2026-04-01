@@ -371,6 +371,9 @@ class _TableWidgetParams {
   final String i18nFunction;
   final List<String> columns;
   final List<String> skips;
+  final String? formWidgetName;
+  final String? reqTypeName;
+  final String? fetchData;
 
   const _TableWidgetParams({
     required this.tItemType,
@@ -378,6 +381,9 @@ class _TableWidgetParams {
     required this.i18nFunction,
     required this.columns,
     required this.skips,
+    this.formWidgetName,
+    this.reqTypeName,
+    this.fetchData,
   });
 }
 
@@ -439,6 +445,37 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
       return "";
     }
 
+    String? formWidgetName;
+    String? reqTypeName;
+    final formWidgetType = annotation.peek("formWidget")?.typeValue;
+    if (formWidgetType != null) {
+      formWidgetName = formWidgetType.getDisplayString(withNullability: false);
+      if (formWidgetType is InterfaceType) {
+        for (var field in formWidgetType.element.fields) {
+          if (field.name == 'onSearch') {
+            final typeStr = field.type.getDisplayString(withNullability: false);
+            // Handle ValueChanged<T> or void Function(T)
+            if (typeStr.startsWith('ValueChanged<') && typeStr.endsWith('>')) {
+              reqTypeName = typeStr.substring(13, typeStr.length - 1);
+            } else if (typeStr.startsWith('void Function(') && typeStr.endsWith(')')) {
+              reqTypeName = typeStr.substring(14, typeStr.length - 1).split(',').first.trim();
+              // Strip variable name if present, e.g. "ListHomeworkReq req" -> "ListHomeworkReq"
+              reqTypeName = reqTypeName.split(' ').first;
+            } else if (field.type is ParameterizedType && (field.type as ParameterizedType).typeArguments.isNotEmpty) {
+              reqTypeName = (field.type as ParameterizedType).typeArguments.first.getDisplayString(withNullability: false);
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    String? fetchData;
+    final fetchDataValue = annotation.peek("fetchData")?.stringValue;
+    if (fetchDataValue != null && fetchDataValue.isNotEmpty) {
+      fetchData = fetchDataValue;
+    }
+
     // TableWidget always generates table widgets
     final params = _TableWidgetParams(
       tItemType: tItemType,
@@ -446,6 +483,9 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
       i18nFunction: i18nFunction,
       columns: columns,
       skips: skips,
+      formWidgetName: formWidgetName,
+      reqTypeName: reqTypeName,
+      fetchData: fetchData,
     );
     return _generateImplementationClass(cls, params);
   }
@@ -509,6 +549,52 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     }
 
     buffer.writeln("}");
+
+    // If formWidgetName and fetchData are provided, generate the ManagementView wrapper
+    if (params.formWidgetName != null && params.fetchData != null) {
+      final viewName = originalName.endsWith('ContentWidgetMixin')
+          ? originalName.substring(0, originalName.length - 'ContentWidgetMixin'.length) + 'ManagementView'
+          : '${baseName}ManagementView';
+      
+      final publicViewName = viewName.startsWith('_') ? viewName.substring(1) : viewName;
+
+      final reqTypeStr = params.reqTypeName ?? 'dynamic';
+
+      buffer.writeln();
+      buffer.writeln("class $publicViewName extends StatefulWidget {");
+      buffer.writeln("  const $publicViewName({super.key});");
+      buffer.writeln();
+      buffer.writeln("  @override");
+      buffer.writeln("  State<$publicViewName> createState() => _${publicViewName}State();");
+      buffer.writeln("}");
+      buffer.writeln();
+      buffer.writeln("class _${publicViewName}State extends State<$publicViewName> {");
+      buffer.writeln("  $reqTypeStr? _param;");
+      buffer.writeln();
+      buffer.writeln("  void _onSearch($reqTypeStr req) {");
+      buffer.writeln("    if (req == _param) return;");
+      buffer.writeln("    setState(() => _param = req);");
+      buffer.writeln("  }");
+      buffer.writeln();
+      buffer.writeln("  @override");
+      buffer.writeln("  Widget build(BuildContext context) {");
+      buffer.writeln("    return Column(");
+      buffer.writeln("      crossAxisAlignment: CrossAxisAlignment.stretch,");
+      buffer.writeln("      children: [");
+      buffer.writeln("        ${params.formWidgetName}(onSearch: _onSearch),");
+      buffer.writeln("        if (_param != null) Expanded(");
+      buffer.writeln("          child: PaginatedView<$reqTypeStr, $tItemName>(");
+      buffer.writeln("            key: ValueKey(_param),");
+      buffer.writeln("            initialParam: _param!,");
+      buffer.writeln("            fetchData: ${params.fetchData},");
+      buffer.writeln("            builder: (context, data) => $implName(items: data),");
+      buffer.writeln("          ),");
+      buffer.writeln("        ),");
+      buffer.writeln("      ],");
+      buffer.writeln("    );");
+      buffer.writeln("  }");
+      buffer.writeln("}");
+    }
 
     return buffer.toString();
   }

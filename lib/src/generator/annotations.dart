@@ -17,11 +17,15 @@ class TableWidget {
   final String i18nFunction;
   final List<String> columns;
   final List<String> skips;
+  final Type? formWidget;
+  final String? fetchData;
   const TableWidget({
     this.useI18n = false,
     this.i18nFunction = 'tr',
     this.columns = const [],
     this.skips = const [],
+    this.formWidget,
+    this.fetchData,
   });
 }
 

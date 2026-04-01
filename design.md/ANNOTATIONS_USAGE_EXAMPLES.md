@@ -283,64 +283,138 @@ class _StudentContentWidget extends TableContentWidget<StudentInfo, StudentReq> 
 
 ## @TableWidget
 
-The `@TableWidget` annotation generates Flutter widget helper methods for table widgets. It is used on mixin classes that extend `TableContentWidget` to automatically generate table headers and data rows.
+The `@TableWidget` annotation generates Flutter table content widgets and optionally full management shell views with pagination and search headers. It is used on mixin classes that end with `Mixin` and extend `TableContentWidget<TItem>`.
 
 ### Parameters
 
-- `fetchClass` (Type, required): The fetch class type (e.g., `OrgBizFetch`).
-- `fetchMethod` (String, required): The name of the fetch method (e.g., `"listOrg"`).
-- `useI18n` (bool, optional): Whether to use internationalization. Defaults to `false`.
+- `columns` (List<String>, optional): Exact fields to show as columns. If omitted, fields from the item class are used.
+- `skips` (List<String>, optional): Fields to hide from the table (e.g., `["id", "createTime"]`).
+- `formWidget` (Type, optional): The widget type to use as the search header (e.g., `_HomeworkSearchHeader`).
+- `fetchData` (String, optional): The method to fetch data (e.g., `"homeworkApi.listHomeworkFetch"`).
+- `useI18n` (bool, optional): Whether to use internationalization for column names. Defaults to `false`.
 - `i18nFunction` (String, optional): Name of the i18n function. Defaults to `"tr"`.
 
-### Basic Usage
+### Basic Table Usage
+
+To just generate a table content widget with specific columns:
 
 ```dart
-@TableWidget(OrgBiz, "listOrg")
-mixin OrgContentMixin on TableContentWidget<OrgInfo, OrgReq> {
-  // Optional: Override specific cells
-  DataCell gen3DataCell(BuildContext context, OrgInfo item) {
-    return DataCell(IconButton(icon: Icon(Icons.edit), onPressed: () {}));
+@TableWidget(columns: ["title", "createTime", "endTime"])
+mixin _HomeworkContentWidgetMixin on TableContentWidget<HomeworkInfo> {
+  // Optional: Add custom tap actions
+  void onTitleTap(BuildContext context, HomeworkInfo item) {
+    // ...
   }
 }
 ```
 
-### With Internationalization
+### Full Management View Usage
+
+By providing `formWidget` and `fetchData`, the generator will also build the entire shell (`ManagementView`) containing the search form and the `PaginatedView`:
 
 ```dart
-@TableWidget(OrgBiz, "listOrg", useI18n: true, i18nFunction: 'tr')
-mixin OrgContentMixin on TableContentWidget<OrgInfo, OrgReq> {
+@TableWidget(
+  columns: ["title", "createTime", "endTime"],
+  formWidget: _HomeworkSearchHeader,
+  fetchData: "homeworkApi.listHomeworkFetch",
+)
+mixin _HomeworkContentWidgetMixin on TableContentWidget<HomeworkInfo> {
+}
+
+class _HomeworkSearchHeader extends StatefulWidget {
+  const _HomeworkSearchHeader({required this.onSearch});
+  final ValueChanged<ListHomeworkReq> onSearch; // Generator extracts ListHomeworkReq from here
+  // ...
 }
 ```
 
 ### Generated Output
 
-For `@TableWidget`, the generator creates:
+For the full management view usage, the generator creates:
+
+1. The Table widget (`HomeworkContentWidget`):
 
 ```dart
-class OrgContentImpl extends TableContentWidget<OrgInfo, OrgReq> with OrgContentMixin {
-  const OrgContentImpl({super.key});
-
-  @override
-  Future<List<OrgInfo>> fetchData(PaginationController<OrgReq> controller) => OrgBizFetch.listOrg(controller);
+class HomeworkContentWidget extends TableContentWidget<HomeworkInfo> with _HomeworkContentWidgetMixin {
+  const HomeworkContentWidget({super.key, required super.items});
 
   @override
   List<DataColumn> genTableHeader(BuildContext context) {
     return [
-      DataColumn(label: const Text('id')),
-      DataColumn(label: const Text('shortname')),
-      DataColumn(label: const Text('name')),
+      DataColumn(label: const Text('title')),
+      // ...
     ];
   }
 
   @override
-  List<DataCell> genTableData(BuildContext context, OrgInfo item) {
+  List<DataCell> genTableData(BuildContext context, HomeworkInfo item) {
     return [
-      DataCell(Center(child: Text(item.id.toString()))),
-      DataCell(Text(item.shortname.toString())),
-      DataCell(Text(item.name.toString())),
+      DataCell(Text(item.title.toString())),
+      // ...
     ];
   }
 }
+```
+
+2. The Management shell (`HomeworkManagementView`):
+
+```dart
+class HomeworkManagementView extends StatefulWidget {
+  const HomeworkManagementView({super.key});
+  @override
+  State<HomeworkManagementView> createState() => _HomeworkManagementViewState();
+}
+
+class _HomeworkManagementViewState extends State<HomeworkManagementView> {
+  ListHomeworkReq? _param;
+
+  void _onSearch(ListHomeworkReq req) {
+    if (req == _param) return;
+    setState(() => _param = req);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _HomeworkSearchHeader(onSearch: _onSearch),
+        if (_param != null) Expanded(
+          child: PaginatedView<ListHomeworkReq, HomeworkInfo>(
+            key: ValueKey(_param),
+            initialParam: _param!,
+            fetchData: homeworkApi.listHomeworkFetch,
+            builder: (context, data) => HomeworkContentWidget(items: data),
+          ),
+        ),
+      ],
+    );
+  }
+}
+```
+
+### Usage in Flutter Pages
+
+If you generated the full management view, you can simply use it in your page:
+
+```dart
+class HomeworkManagementPage extends MainContentWidget {
+  const HomeworkManagementPage({super.key});
+  @override
+  Widget buildWithOrg(BuildContext context, OrgInfo org) {
+    return HomeworkManagementView(key: ValueKey(org.id));
+  }
+}
+```
+
+If you only generated the table content widget (no `formWidget`/`fetchData`), you can construct the shell manually:
+
+```dart
+PaginatedView<OrgReq, OrgInfo>(
+  initialParam: OrgReq(parentId: 0, xx: _xx),
+  fetchData: OrgBizFetch.listOrg,
+  builder: (context, data) => HomeworkContentWidget(items: data),
+)
 ```
 
 ### Usage in Flutter Widgets

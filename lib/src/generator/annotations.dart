@@ -15,6 +15,15 @@ class ReqConfig {
 class TableWidget {
   final bool useI18n;
   final String i18nFunction;
+  /// Column specs: each entry is either a single field name, or
+  /// `"fieldName displayLabel"` (first token = model field and codegen hooks;
+  /// the rest is the column header: plain text when [useI18n] is false, or the
+  /// key passed to [i18nFunction] when [useI18n] is true). If there is only one
+  /// token, that string is used for both field binding and header/i18n key.
+  /// Examples:
+  /// - `["title", "createTime", "endTime"]`
+  /// - `["title course.title", "status course.status"]`
+  /// - `["title course.title", "status course.status", "createTime 创建时间", "endTime 结束时间"]`
   final List<String> columns;
   final List<String> skips;
   final Type? formWidget;

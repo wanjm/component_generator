@@ -10,6 +10,22 @@ import 'package:source_gen/source_gen.dart';
 import 'package:dart_style/dart_style.dart';
 import 'package:http_method/src/generator/annotations.dart';
 
+/// Splits a `@TableWidget` [columns] entry: the first whitespace-separated
+/// token is the model field name; any following text (trimmed) is the column
+/// header / i18n key. If there is only one token, the label matches the field name.
+(String fieldName, String headerLabel) _splitTableColumnSpec(String raw) {
+  final t = raw.trim();
+  final match = RegExp(r'^(\S+)\s+(.+)$').firstMatch(t);
+  if (match != null) {
+    return (match.group(1)!, match.group(2)!.trim());
+  }
+  return (t, t);
+}
+
+String _escapeDartSingleQuotedString(String s) {
+  return s.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+}
+
 const String _myClientTemplate =
     """import 'package:http_method/http1_client.dart' as pl;
 import 'package:http_method/http_method.dart';
@@ -638,13 +654,16 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     }
 
     // 3. for each column gen the headers & datacell;
-    for (var columnName in columnNames) {
-      // Generate header
+    for (var columnRaw in columnNames) {
+      final (columnName, headerDisplay) = _splitTableColumnSpec(columnRaw);
+      // Generate header (headerDisplay may differ when columnRaw has two+ tokens)
       String columnLabel;
       if (useI18n) {
-        columnLabel = "Text($i18nFunction('$columnName'))";
+        final key = _escapeDartSingleQuotedString(headerDisplay);
+        columnLabel = "Text($i18nFunction('$key'))";
       } else {
-        columnLabel = "const Text('$columnName')";
+        final disp = _escapeDartSingleQuotedString(headerDisplay);
+        columnLabel = "const Text('$disp')";
       }
       headers.add("DataColumn(label: $columnLabel)");
 

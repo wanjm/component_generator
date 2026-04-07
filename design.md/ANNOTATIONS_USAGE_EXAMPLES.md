@@ -291,8 +291,30 @@ The `@TableWidget` annotation generates Flutter table content widgets and option
 - `skips` (List<String>, optional): Fields to hide from the table (e.g., `["id", "createTime"]`).
 - `formWidget` (Type, optional): The widget type to use as the search header (e.g., `_HomeworkSearchHeader`).
 - `fetchData` (String, optional): The method to fetch data (e.g., `"homeworkApi.listHomeworkFetch"`).
-- `useI18n` (bool, optional): Whether to use internationalization for column names. Defaults to `false`.
+- `useI18n` (bool, optional): Whether to use internationalization for column headers. Defaults to `false`.
 - `i18nFunction` (String, optional): Name of the i18n function. Defaults to `"tr"`.
+
+### `columns` label syntax
+
+Each `columns` entry is either:
+
+1. **Field only** — one token (no spaces): the same name is used for the model field, the header (when `useI18n` is false), and the i18n lookup key (when `useI18n` is true).
+
+   ```dart
+   columns: ["title", "createTime", "endTime"]
+   ```
+
+2. **Field + display label** — first whitespace-separated token is the **field name** (data binding, `genFieldDataCell`, `onFieldTap`). The **rest of the string** (trimmed) is the **display label**: shown as `Text` when `useI18n` is false, or passed to `i18nFunction` as the translation key when `useI18n` is true.
+
+   ```dart
+   // Plain headers (useI18n: false)
+   columns: ["createTime 创建时间", "studentName 学生姓名"]
+
+   // i18n: tr() receives the display part ("course.title"), not the field name
+   @TableWidget(useI18n: true, columns: ["title course.title", "status course.status"])
+   ```
+
+Single-token and two-part entries can be mixed in the same list.
 
 ### Basic Table Usage
 

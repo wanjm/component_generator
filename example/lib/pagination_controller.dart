@@ -1,4 +1,3 @@
-import 'package:http_method/http_method.dart';
 import 'package:component_set/paging/pagination_controller.dart';
 
 /// Small Dart-only pagination holder for the example (no Flutter).

@@ -360,7 +360,8 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
       controller.setTotalCount(obj.total);
       return obj.list;
     } else {
-      throw Exception(resp.msg ?? "Failed to load data (code: \\\${resp.code})");
+      throw Exception(resp.msg ??
+          "Failed to load data (code: " + resp.code.toString() + ")");
     }
   }""";
   }

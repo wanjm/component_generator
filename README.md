@@ -129,11 +129,11 @@ void main() async {
   client.prefix = "https://api.example.com";
 
   // Login
-  final loginResult = await networkService.login(LoginParams("user", "pass"));
+  final loginResult = await networkApi.login(LoginParams("user", "pass"));
   print(loginResult.obj);
 
   // List users
-  final userList = await networkService.listUser(LoginParams("", ""));
+  final userList = await networkApi.listUser(LoginParams("", ""));
   print("Total users: ${userList.obj?.total}");
 }
 ```
@@ -284,29 +284,18 @@ abstract class ProductApi {
   Future<RespData<ProductListResp?>> listProducts(ProductReq data);
 }
 
-// Automatically generates:
-class ProductApiFetch {
-  static Future<List<ProductInfo>> listProducts(
-      PaginationController<ProductReq> controller) async {
-    final baseParam = controller.param;
-    baseParam.pageNum = controller.pageNum;
-    baseParam.pageSize = controller.pageSize;
-
-    final resp = await productService.listProducts(baseParam);
-    if (resp.code == RespCode.SUCCESS && resp.obj != null) {
-      controller.setTotalCount(resp.obj!.total);
-      return resp.obj!.list;
-    } else {
-      throw Exception(resp.msg ?? "Failed to load data");
-    }
-  }
-}
+// Automatically generates (part file, same library): an implementation class
+// named `${InterfaceName}Api` (e.g. `NetworkApi` for `Network`) plus an instance,
+// and list helpers such as:
+//
+//   Future<List<ProductInfo>> listProductsFetch(
+//       IPaginationController<ProductReq> controller) async { ... }
 ```
 
 **Requirements:**
 - Response type must have `list` and `total` fields
 - Request type must extend `JSONParameter` and include `pageNum` and `pageSize` fields
-- The generated fetch method uses `IPaginationController<T>` from your shared `component_set` package. Add `component_set` to `pubspec.yaml` and import `package:component_set/component.dart` in `network.gen.dart` (the gos Flutter generator emits this import).
+- Generated fetch methods take `IPaginationController<T>` from **`package:http_method/http_method.dart`**. Implement it in your app (see the `example/` folder for a small Dart-only implementation).
 
 ### Flutter Integration
 

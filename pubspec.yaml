@@ -1,8 +1,13 @@
 name: http_method
-description: A starting point for Dart libraries or applications.
+description: >-
+  Annotated HTTP client code generation (REST), optional table/widget helpers,
+  and HTTP/1.1 and HTTP/2 client bases for Dart.
 version: 0.1.1
-author: <wan_jm@126.com>
 repository: https://github.com/wanjm/http_method
+topics:
+  - codegen
+  - build-runner
+  - http
 
 environment:
   sdk: ^3.0.0

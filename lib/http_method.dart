@@ -1,6 +1,5 @@
-/// Support for doing something awesome.
-///
-/// More dartdocs go here.
+/// Code generation helpers and HTTP client utilities for annotated API
+/// interfaces ([DataInterface], [ReqConfig]) and related types.
 library;
 
 export 'src/http/http_base.dart';

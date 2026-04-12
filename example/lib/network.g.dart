@@ -6,8 +6,8 @@ part of 'network.dart';
 // Generator: NetworkBuilder
 // **************************************************************************
 
-class NetworkImpl extends BaseMethod implements Network {
-  NetworkImpl({super.client});
+class NetworkApi extends BaseMethod implements Network {
+  NetworkApi({required super.client});
 
   @override
   Future<RespData<dynamic>> login(LoginParams data) => getData(
@@ -27,6 +27,24 @@ class NetworkImpl extends BaseMethod implements Network {
           resp.obj = ListUserResp.fromJson(resp.res);
         },
       );
+
+  Future<List<UserInfo>> listUserFetch(
+      IPaginationController<LoginParams> controller) async {
+    final baseParam = controller.param;
+    baseParam.pageNum = controller.pageNum;
+    baseParam.pageSize = controller.pageSize;
+
+    final resp = await listUser(baseParam);
+
+    if (resp.code == RespCode.SUCCESS && resp.obj != null) {
+      final obj = resp.obj!;
+      controller.setTotalCount(obj.total);
+      return obj.list;
+    } else {
+      throw Exception(resp.msg ??
+          "Failed to load data (code: " + resp.code.toString() + ")");
+    }
+  }
 }
 
-var networkService = NetworkImpl(client: client);
+var networkApi = NetworkApi(client: client);

@@ -306,7 +306,7 @@ class ProductApiFetch {
 **Requirements:**
 - Response type must have `list` and `total` fields
 - Request type must extend `JSONParameter` and include `pageNum` and `pageSize` fields
-- The generated fetch method uses `IPaginationController<T>` from your shared `component` package. Add `component` to `pubspec.yaml` and import `package:component/component.dart` in `network.gen.dart` (the gos Flutter generator emits this import).
+- The generated fetch method uses `IPaginationController<T>` from your shared `component_set` package. Add `component_set` to `pubspec.yaml` and import `package:component_set/component.dart` in `network.gen.dart` (the gos Flutter generator emits this import).
 
 ### Flutter Integration
 

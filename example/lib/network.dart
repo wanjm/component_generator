@@ -1,4 +1,5 @@
-import 'package:http_method/http_method.dart';
+import 'package:component_generator/component_generator.dart';
+import 'package:component_set/component_set.dart';
 import 'schema.dart';
 import 'myclient.dart';
 part 'network.g.dart';

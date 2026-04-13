@@ -1,15 +1,34 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:analyzer/dart/analysis/results.dart';
+import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_gen/source_gen.dart';
 import 'package:dart_style/dart_style.dart';
-import 'package:http_method/src/generator/annotations.dart';
+import 'package:component_generator/src/generator/annotations.dart';
 
-const String _myClientTemplate = """import 'package:http_method/http1_client.dart' as pl;
-import 'package:http_method/http_method.dart';
+/// Splits a `@TableWidget` [columns] entry: the first whitespace-separated
+/// token is the model field name; any following text (trimmed) is the column
+/// header / i18n key. If there is only one token, the label matches the field name.
+(String fieldName, String headerLabel) _splitTableColumnSpec(String raw) {
+  final t = raw.trim();
+  final match = RegExp(r'^(\S+)\s+(.+)$').firstMatch(t);
+  if (match != null) {
+    return (match.group(1)!, match.group(2)!.trim());
+  }
+  return (t, t);
+}
+
+String _escapeDartSingleQuotedString(String s) {
+  return s.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+}
+
+const String _myClientTemplate =
+    """import 'package:component_set/http1_client.dart' as pl;
+import 'package:component_set/component_set.dart';
 
 class MyClient extends pl.HttpClientBase {
   MyClient() : super();
@@ -28,13 +47,14 @@ const int _typeList = 1;
 /// 网络接口生成器
 class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
   // ignore: unused_field
-  final _formatter = DartFormatter(languageVersion: DartFormatter.latestLanguageVersion);
+  final _formatter =
+      DartFormatter(languageVersion: DartFormatter.latestLanguageVersion);
 
   static final Set<String> _myClientChecked = <String>{};
-  static final Set<String> _paginationControllerGenerated = <String>{};
 
   @override
-  FutureOr<String> generateForAnnotatedElement(Element element, ConstantReader annotation, BuildStep buildStep) async {
+  FutureOr<String> generateForAnnotatedElement(
+      Element element, ConstantReader annotation, BuildStep buildStep) async {
     if (element is! ClassElement) {
       return "";
     }
@@ -47,7 +67,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     }
 
     final cls = element;
-    final clsName = "${cls.name}Impl";
+    final clsName = "${cls.name}Api";
     final ifName = cls.name;
     var withMixin = annotation.read("mixins").stringValue;
     if (withMixin.isNotEmpty) {
@@ -57,7 +77,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     final methods = <String>[];
 
     for (var methodElement in cls.methods) {
-      final methodData = _processMethod(methodElement);
+      final methodData = _processMethod(methodElement,ifName!);
       if (methodData != null) {
         methods.add(methodData.implementation);
       }
@@ -66,12 +86,14 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     final clientValue = annotation.read("client").stringValue;
     final nameValue = annotation.read("name").stringValue;
     final client = clientValue.isNotEmpty ? clientValue : "client";
-    final name = nameValue.isNotEmpty ? nameValue : "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Service";
+    final name = nameValue.isNotEmpty
+        ? nameValue
+        : "${cls.name![0].toLowerCase()}${cls.name!.substring(1)}Api";
 
     // Generate fetch methods for list responses
     final fetchMethods = <String>[];
     for (var methodElement in cls.methods) {
-      final fetchMethod = _processFetchMethod(methodElement, cls, name);
+      final fetchMethod = _processFetchMethod(methodElement, cls);
       if (fetchMethod != null) {
         fetchMethods.add(fetchMethod);
       }
@@ -79,41 +101,71 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
 
     final buffer = StringBuffer();
 
-    // Generate pagination controller interface and class only once per file
-    final fileId = buildStep.inputId.path;
-    if (!_paginationControllerGenerated.contains(fileId)) {
-      _paginationControllerGenerated.add(fileId);
-      buffer.writeln(_generatePaginationController());
-      buffer.writeln();
-    }
-
-    buffer.writeln("class $clsName extends BaseMethod $withMixin implements $ifName {");
-    buffer.writeln("  $clsName({super.client});");
+    buffer.writeln(
+        "class $clsName extends BaseMethod $withMixin implements $ifName {");
+    buffer.writeln("  $clsName({required super.client});");
     buffer.writeln();
     buffer.writeln("  ${methods.join("\n\n  ")}");
+    if (fetchMethods.isNotEmpty) {
+      buffer.writeln();
+      buffer.writeln("  ${fetchMethods.join("\n\n  ")}");
+    }
     buffer.writeln("}");
     buffer.writeln();
     buffer.writeln("var $name = $clsName(client: $client);");
 
-    // Add fetch class if there are fetch methods
-    if (fetchMethods.isNotEmpty) {
-      final fetchClsName = "${cls.name}Fetch";
-      buffer.writeln();
-      buffer.writeln("class $fetchClsName {");
-      buffer.writeln("  ${fetchMethods.join("\n\n  ")}");
-      buffer.writeln("}");
-    }
-
     return buffer.toString();
   }
 
-  _MethodData? _processMethod(MethodElement f) {
+  /// Returns the URL expression for generated code: variable name (e.g. loginUrl)
+  /// when the annotation uses a constant reference, or quoted string when literal.
+  String _getUrlExpression(
+      MethodElement f, ConstantReader reader, TypeChecker reqConfigChecker, String ifName) {
+    final stringValue = reader.read("url").stringValue;
+    final session = f.session;
+    final library = f.library;
+
+    final parsed = session?.getParsedLibraryByElement(library);
+    if (parsed is! ParsedLibraryResult) return '"$stringValue"';
+
+    final parsedLib = parsed;
+    final declResult = parsedLib.getFragmentDeclaration(f.firstFragment);
+    if (declResult == null) return '"$stringValue"';
+
+    final methodNode = declResult.node;
+    if (methodNode is! MethodDeclaration) return '"$stringValue"';
+
+    for (final annotation in methodNode.metadata) {
+      final name = annotation.name;
+      final isReqConfig =
+          name is SimpleIdentifier && name.name == 'ReqConfig' ||
+              name is PrefixedIdentifier && name.identifier.name == 'ReqConfig';
+      if (!isReqConfig) continue;
+
+      final args = annotation.arguments?.arguments;
+      if (args == null || args.isEmpty) break;
+
+      final firstArg = args.first;
+      if (firstArg is SimpleIdentifier || firstArg is PrefixedIdentifier) {
+        final content = declResult.parsedUnit?.content;
+        // content is the source code;
+        if (content != null) {
+          // get the variable name from the source code;
+          return "$ifName.${content.substring(firstArg.offset, firstArg.end)}";
+        }
+      }
+      break;
+    }
+    return '"$stringValue"';
+  }
+
+  _MethodData? _processMethod(MethodElement f, String ifName) {
     TypeChecker reqConfigChecker = TypeChecker.typeNamed(ReqConfig);
     final reqConfigAnnotation = reqConfigChecker.firstAnnotationOf(f);
     if (reqConfigAnnotation == null) return null;
 
     final reader = ConstantReader(reqConfigAnnotation);
-    final url = reader.read("url").stringValue;
+    final urlExpr = _getUrlExpression(f, reader, reqConfigChecker, ifName);
     final returnType = f.returnType;
     if (returnType is! InterfaceType) return null;
     if (returnType.typeArguments.isEmpty) return null;
@@ -123,9 +175,11 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     if (respType.typeArguments.isEmpty) return null;
 
     final innerRespType = respType.typeArguments[0];
-    final noDetailData = innerRespType is VoidType || innerRespType is DynamicType;
+    final noDetailData =
+        innerRespType is VoidType || innerRespType is DynamicType;
 
     String respName = "";
+    String innerRespTypeString = "";
     String formatCode;
 
     if (noDetailData) {
@@ -134,14 +188,16 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     } else {
       // Handle non-dynamic types
       if (innerRespType is! InterfaceType) return null;
-
+      innerRespTypeString =
+          innerRespType.getDisplayString(withNullability: false);
       final innerRespTypeInterface = innerRespType;
       InterfaceType? realRespType;
       int? resultType;
 
       if (innerRespTypeInterface.typeArguments.isNotEmpty) {
         if (innerRespTypeInterface.isDartCoreList) {
-          realRespType = innerRespTypeInterface.typeArguments[0] as InterfaceType;
+          realRespType =
+              innerRespTypeInterface.typeArguments[0] as InterfaceType;
           resultType = _typeList;
           // } else {
           //   var superclass = innerRespType.superclass;
@@ -208,7 +264,9 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     final firstParam = paramsList.isNotEmpty ? paramsList[0].name : "null";
     final secondParam = paramsList.length > 1 ? (paramsList[1]).name : "false";
 
-    final bufferString = noDetailData ? "" : "buffer: bufferMap[\"$url\"] as ClassBuffer<$keyTypeString, $respName>?,";
+    final bufferString = noDetailData
+        ? ""
+        : "buffer: bufferMap[$urlExpr] as ClassBuffer<$keyTypeString, $innerRespTypeString>?,";
     final methodString = reqMethod != "POST" ? "method: \"$reqMethod\"," : "";
     final slientString = secondParam != "false" ? "slient: $secondParam," : "";
 
@@ -217,7 +275,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
   $methodDisplayString=> getData(
         data: $firstParam,
         $slientString
-        url: "$url",
+        url: $urlExpr,
         $bufferString
         $methodString
         encodeDataFunction: (RespData resp) {
@@ -229,7 +287,8 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
   }
 
   /// 确保 myclient.dart 文件存在，如果不存在则从模板复制
-  Future<void> _ensureMyClientExists(BuildStep buildStep, String package) async {
+  Future<void> _ensureMyClientExists(
+      BuildStep buildStep, String package) async {
     try {
       // 使用文件系统操作：检查目标文件是否存在
       // 获取源文件所在的目录（与 .g.dart 文件相同的目录）
@@ -255,19 +314,9 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     }
   }
 
-  /// Generate pagination controller interface and implementation
-  String _generatePaginationController() {
-    return """abstract class IPaginationController<T> {
-  T get param;
-  int get pageNum;
-  int get pageSize;
-  void setTotalCount(int total);
-}
-""";
-  }
-
   /// Process a method to generate fetch method if it returns a list response
-  String? _processFetchMethod(MethodElement f, ClassElement cls, String serviceInstanceName) {
+  String? _processFetchMethod(
+      MethodElement f, ClassElement cls) {
     final returnType = f.returnType;
     if (returnType is! InterfaceType) return null;
     if (returnType.typeArguments.isEmpty) return null;
@@ -288,28 +337,30 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     if (listField == null || totalField == null) return null;
 
     final listFieldType = listField.type;
-    if (listFieldType is! InterfaceType || listFieldType.typeArguments.isEmpty) return null;
+    if (listFieldType is! InterfaceType || listFieldType.typeArguments.isEmpty)
+      return null;
     final listItemType = listFieldType.typeArguments[0];
     final parameters = (f.type as dynamic).parameters as List;
     final reqType = parameters.isNotEmpty ? parameters[0].type : null;
     if (reqType == null) return null;
 
     final methodName = f.name;
+    final fetchMethodName = "${methodName}Fetch";
 
     return """
-  static Future<List<${listItemType.getDisplayString(withNullability: false)}>> $methodName(IPaginationController<${reqType.getDisplayString(withNullability: false)}> controller) async {
+  Future<List<${listItemType.getDisplayString(withNullability: false)}>> $fetchMethodName(IPaginationController<${reqType.getDisplayString(withNullability: false)}> controller) async {
     final baseParam = controller.param;
     baseParam.pageNum = controller.pageNum;
     baseParam.pageSize = controller.pageSize;
 
-    final resp = await $serviceInstanceName.$methodName(baseParam);
+    final resp = await $methodName(baseParam);
 
     if (resp.code == RespCode.SUCCESS && resp.obj != null) {
       final obj = resp.obj!;
       controller.setTotalCount(obj.total);
       return obj.list;
     } else {
-      throw Exception(resp.msg ?? "Failed to load data (code: \\\${resp.code})");
+      throw Exception(resp.msg ?? "Failed to load data (code: \${resp.code})");
     }
   }""";
   }
@@ -332,28 +383,31 @@ Builder networkBuilder(BuilderOptions options) {
 /// Parameters for generating implementation class
 class _TableWidgetParams {
   final InterfaceType tItemType;
-  final InterfaceType? tParamType;
   final bool useI18n;
   final String i18nFunction;
-  final String fetchMethod;
   final List<String> columns;
   final List<String> skips;
+  final String? formWidgetName;
+  final String? reqTypeName;
+  final String? fetchData;
 
   const _TableWidgetParams({
     required this.tItemType,
-    this.tParamType,
     required this.useI18n,
     required this.i18nFunction,
-    required this.fetchMethod,
     required this.columns,
     required this.skips,
+    this.formWidgetName,
+    this.reqTypeName,
+    this.fetchData,
   });
 }
 
 /// 自动生成 Widget 相关代码的 Builder
 class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
   @override
-  FutureOr<String> generateForAnnotatedElement(Element element, ConstantReader annotation, BuildStep buildStep) {
+  FutureOr<String> generateForAnnotatedElement(
+      Element element, ConstantReader annotation, BuildStep buildStep) {
     if (element is! MixinElement) return "";
 
     final cls = element;
@@ -368,45 +422,36 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     final useI18n = annotation.read("useI18n").boolValue;
     final i18nFunction = annotation.read("i18nFunction").stringValue;
 
-    // Check for Type-based approach first (fetchClass + fetchMethodName)
-    String fetchMethod = '';
-    final fetchClassType = annotation.peek("fetchClass")?.typeValue;
-    final fetchMethodName = annotation.peek("fetchMethod")?.stringValue ?? "";
-    if (fetchClassType != null && fetchMethodName.isNotEmpty) {
-      String className = '';
-      // Type-based approach: fetchClass: OrgBizFetch, fetchMethodName: "listOrg"
-      className = fetchClassType.getDisplayString(withNullability: false);
-      fetchMethod = "${className}Fetch.$fetchMethodName";
-    }
-
     // Read columns and skips parameters
     List<String> columns = const [];
     final columnsValue = annotation.peek("columns")?.listValue;
     if (columnsValue != null) {
-      columns = columnsValue.map((e) => e.toStringValue() ?? "").where((e) => e.isNotEmpty).toList();
+      columns = columnsValue
+          .map((e) => e.toStringValue() ?? "")
+          .where((e) => e.isNotEmpty)
+          .toList();
     }
 
     List<String> skips = const [];
     final skipsValue = annotation.peek("skips")?.listValue;
     if (skipsValue != null) {
-      skips = skipsValue.map((e) => e.toStringValue() ?? "").where((e) => e.isNotEmpty).toList();
+      skips = skipsValue
+          .map((e) => e.toStringValue() ?? "")
+          .where((e) => e.isNotEmpty)
+          .toList();
     }
 
-    // Extract TableContentWidget<TItem, TParam> from constraints / supertypes
+    // Extract TableContentWidget<TItem> from constraints / supertypes
     InterfaceType? tItemType;
-    InterfaceType? tParamType;
 
     // Scan all supertypes for TableContentWidget
     for (var type in cls.allSupertypes) {
-      if (type.element.name == 'TableContentWidget' && type.typeArguments.isNotEmpty) {
+      if (type.element.name == 'TableContentWidget' &&
+          type.typeArguments.isNotEmpty) {
         final t = type.typeArguments[0];
         final element = t.element;
         if (element is InterfaceElement) {
           tItemType = element.thisType;
-        }
-        if (type.typeArguments.length > 1) {
-          final paramType = type.typeArguments[1];
-          tParamType = paramType as InterfaceType?;
         }
         break;
       }
@@ -416,55 +461,92 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
       return "";
     }
 
+    String? formWidgetName;
+    String? reqTypeName;
+    final formWidgetType = annotation.peek("formWidget")?.typeValue;
+    if (formWidgetType != null) {
+      formWidgetName = formWidgetType.getDisplayString(withNullability: false);
+      if (formWidgetType is InterfaceType) {
+        for (var field in formWidgetType.element.fields) {
+          if (field.name == 'onSearch') {
+            final typeStr = field.type.getDisplayString(withNullability: false);
+            // Handle ValueChanged<T> or void Function(T)
+            if (typeStr.startsWith('ValueChanged<') && typeStr.endsWith('>')) {
+              reqTypeName = typeStr.substring(13, typeStr.length - 1);
+            } else if (typeStr.startsWith('void Function(') && typeStr.endsWith(')')) {
+              reqTypeName = typeStr.substring(14, typeStr.length - 1).split(',').first.trim();
+              // Strip variable name if present, e.g. "ListHomeworkReq req" -> "ListHomeworkReq"
+              reqTypeName = reqTypeName.split(' ').first;
+            } else if (field.type is ParameterizedType && (field.type as ParameterizedType).typeArguments.isNotEmpty) {
+              reqTypeName = (field.type as ParameterizedType).typeArguments.first.getDisplayString(withNullability: false);
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    String? fetchData;
+    final fetchDataValue = annotation.peek("fetchData")?.stringValue;
+    if (fetchDataValue != null && fetchDataValue.isNotEmpty) {
+      fetchData = fetchDataValue;
+    }
+
     // TableWidget always generates table widgets
     final params = _TableWidgetParams(
       tItemType: tItemType,
-      tParamType: tParamType,
       useI18n: useI18n,
       i18nFunction: i18nFunction,
-      fetchMethod: fetchMethod,
       columns: columns,
       skips: skips,
+      formWidgetName: formWidgetName,
+      reqTypeName: reqTypeName,
+      fetchData: fetchData,
     );
     return _generateImplementationClass(cls, params);
   }
 
-  String _generateImplementationClass(MixinElement cls, _TableWidgetParams params) {
+  String _generateImplementationClass(
+      MixinElement cls, _TableWidgetParams params) {
     final buffer = StringBuffer();
-    // Derive class name from mixin: strip trailing 'Mixin' if present
+    // Derive class name from mixin: strip trailing 'Mixin' if present,
+    // and strip leading '_' so the generated class is public
     final originalName = cls.name ?? '';
-    final baseName =
-        originalName.endsWith('Mixin') ? originalName.substring(0, originalName.length - 'Mixin'.length) : originalName;
-    final implName = baseName;
+    final baseName = originalName.endsWith('Mixin')
+        ? originalName.substring(0, originalName.length - 'Mixin'.length)
+        : originalName;
+    final implName =
+        baseName.startsWith('_') ? baseName.substring(1) : baseName;
     final tItemName = params.tItemType.getDisplayString(withNullability: false);
-    final tParamName = params.tParamType?.getDisplayString(withNullability: false) ?? 'dynamic';
 
     // Mixins do not have constructors; always use a simple const constructor
     const constructorCall = "";
 
-    final hasGenTableHeader = cls.methods.any((m) => m.name == 'genTableHeader' && !m.isAbstract);
-    final hasGenTableData = cls.methods.any((m) => m.name == 'genTableData' && !m.isAbstract);
-    final hasFetchData = cls.methods.any((m) => m.name == 'fetchData' && !m.isAbstract);
+    final hasGenTableHeader =
+        cls.methods.any((m) => m.name == 'genTableHeader' && !m.isAbstract);
+    final hasGenTableData =
+        cls.methods.any((m) => m.name == 'genTableData' && !m.isAbstract);
 
-    final parts = _getWidgetParts(params.tItemType.element, params.useI18n, params.i18nFunction,
-        methodProvider: cls, isItemContext: true, columns: params.columns, skips: params.skips);
+    final parts = _getWidgetParts(
+        params.tItemType.element, params.useI18n, params.i18nFunction,
+        methodProvider: cls,
+        isItemContext: true,
+        columns: params.columns,
+        skips: params.skips);
 
-    // Generate class that extends TableContentWidget and mixes in the annotated mixin
-    buffer.writeln("class $implName extends TableContentWidget<$tItemName, $tParamName> with ${cls.name} {");
-    buffer.writeln("  const $implName({super.key})$constructorCall;");
+    // Generate class that extends TableContentWidget and mixes in the annotated mixin.
+    // The TableContentWidget now only renders data; fetching is handled by PaginatedView.
+    buffer.writeln(
+        "class $implName extends TableContentWidget<$tItemName> with ${cls.name} {");
+    buffer.writeln(
+        "  const $implName({super.key, required super.items})$constructorCall;");
     buffer.writeln();
-
-    if (!hasFetchData && params.fetchMethod.isNotEmpty) {
-      buffer.writeln("  @override");
-      buffer.writeln(
-          "  Future<List<$tItemName>> fetchData(PaginationController<$tParamName> controller) => ${params.fetchMethod}(controller);");
-      buffer.writeln();
-    }
 
     // TableWidget always generates table widgets
     if (!hasGenTableHeader) {
       buffer.writeln("  @override");
-      buffer.writeln("  List<DataColumn> genTableHeader(BuildContext context) {");
+      buffer
+          .writeln("  List<DataColumn> genTableHeader(BuildContext context) {");
       buffer.writeln("    return [");
       buffer.writeln("      ${parts.headers.join(",\n      ")}");
       buffer.writeln("    ];");
@@ -474,7 +556,8 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
 
     if (!hasGenTableData) {
       buffer.writeln("  @override");
-      buffer.writeln("  List<DataCell> genTableData(BuildContext context, $tItemName item) {");
+      buffer.writeln(
+          "  List<DataCell> genTableData(BuildContext context, $tItemName item) {");
       buffer.writeln("    return [");
       buffer.writeln("      ${parts.cells.join(",\n      ")}");
       buffer.writeln("    ];");
@@ -483,10 +566,57 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
 
     buffer.writeln("}");
 
+    // If formWidgetName and fetchData are provided, generate the ManagementView wrapper
+    if (params.formWidgetName != null && params.fetchData != null) {
+      final viewName = originalName.endsWith('ContentWidgetMixin')
+          ? originalName.substring(0, originalName.length - 'ContentWidgetMixin'.length) + 'ManagementView'
+          : '${baseName}ManagementView';
+      
+      final publicViewName = viewName.startsWith('_') ? viewName.substring(1) : viewName;
+
+      final reqTypeStr = params.reqTypeName ?? 'dynamic';
+
+      buffer.writeln();
+      buffer.writeln("class $publicViewName extends StatefulWidget {");
+      buffer.writeln("  const $publicViewName({super.key});");
+      buffer.writeln();
+      buffer.writeln("  @override");
+      buffer.writeln("  State<$publicViewName> createState() => _${publicViewName}State();");
+      buffer.writeln("}");
+      buffer.writeln();
+      buffer.writeln("class _${publicViewName}State extends State<$publicViewName> {");
+      buffer.writeln("  $reqTypeStr? _param;");
+      buffer.writeln();
+      buffer.writeln("  void _onSearch($reqTypeStr req) {");
+      buffer.writeln("    if (req == _param) return;");
+      buffer.writeln("    setState(() => _param = req);");
+      buffer.writeln("  }");
+      buffer.writeln();
+      buffer.writeln("  @override");
+      buffer.writeln("  Widget build(BuildContext context) {");
+      buffer.writeln("    return Column(");
+      buffer.writeln("      crossAxisAlignment: CrossAxisAlignment.stretch,");
+      buffer.writeln("      children: [");
+      buffer.writeln("        ${params.formWidgetName}(onSearch: _onSearch),");
+      buffer.writeln("        if (_param != null) Expanded(");
+      buffer.writeln("          child: PaginatedView<$reqTypeStr, $tItemName>(");
+      buffer.writeln("            key: ValueKey(_param),");
+      buffer.writeln("            initialParam: _param!,");
+      buffer.writeln("            fetchData: ${params.fetchData},");
+      buffer.writeln("            builder: (context, data) => $implName(items: data),");
+      buffer.writeln("          ),");
+      buffer.writeln("        ),");
+      buffer.writeln("      ],");
+      buffer.writeln("    );");
+      buffer.writeln("  }");
+      buffer.writeln("}");
+    }
+
     return buffer.toString();
   }
 
-  _WidgetParts _getWidgetParts(InterfaceElement cls, bool useI18n, String i18nFunction,
+  _WidgetParts _getWidgetParts(
+      InterfaceElement cls, bool useI18n, String i18nFunction,
       {required MixinElement methodProvider,
       required bool isItemContext,
       List<String> columns = const [],
@@ -524,13 +654,16 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     }
 
     // 3. for each column gen the headers & datacell;
-    for (var columnName in columnNames) {
-      // Generate header
+    for (var columnRaw in columnNames) {
+      final (columnName, headerDisplay) = _splitTableColumnSpec(columnRaw);
+      // Generate header (headerDisplay may differ when columnRaw has two+ tokens)
       String columnLabel;
       if (useI18n) {
-        columnLabel = "Text($i18nFunction('$columnName'))";
+        final key = _escapeDartSingleQuotedString(headerDisplay);
+        columnLabel = "Text($i18nFunction('$key'))";
       } else {
-        columnLabel = "const Text('$columnName')";
+        final disp = _escapeDartSingleQuotedString(headerDisplay);
+        columnLabel = "const Text('$disp')";
       }
       headers.add("DataColumn(label: $columnLabel)");
 
@@ -538,7 +671,9 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
       String valueExpr;
       final field = fieldMap[columnName];
 
-      final capitalizedName = columnName.isEmpty ? "" : "${columnName[0].toUpperCase()}${columnName.substring(1)}";
+      final capitalizedName = columnName.isEmpty
+          ? ""
+          : "${columnName[0].toUpperCase()}${columnName.substring(1)}";
       final customMethodName = "gen${capitalizedName}DataCell";
       if (field == null) {
         // - if column not in field, gen genXXXDataCell;
@@ -557,7 +692,8 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
           // - else if onXXXTap, gen DataCell with it as onTap;
           final tapMethodName = "on${capitalizedName}Tap";
           if (methodProvider.getMethod(tapMethodName) != null) {
-            valueExpr = "DataCell($textExpr, onTap: () => $tapMethodName(context, item))";
+            valueExpr =
+                "DataCell($textExpr, onTap: () => $tapMethodName(context, item))";
           } else {
             valueExpr = "DataCell($textExpr)";
           }

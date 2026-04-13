@@ -8,7 +8,7 @@ Create a class that extends `TableContentWidget`. You only need to implement `fe
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:http_method/http_method.dart';
+import 'package:component_generator/component_generator.dart';
 import 'schema.gen.dart';
 import 'pagination_controller.dart';
 

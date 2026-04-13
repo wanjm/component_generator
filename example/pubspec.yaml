@@ -1,5 +1,5 @@
 name: example
-description: Example usage of http_method code generation
+description: Example usage of component_generator code generation
 version: 1.0.0
 publish_to: none
 
@@ -7,7 +7,7 @@ environment:
   sdk: ^3.0.0
 
 dependencies:
-  http_method:
+  component_generator:
     path: ../
   component_set: 0.1.1
 

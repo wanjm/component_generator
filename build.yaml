@@ -1,12 +1,12 @@
 targets:
   $default:
     builders:
-      http_method|networkBuilder:
+      component_generator|networkBuilder:
         enabled: true
 
 builders:
   networkBuilder:
-    import: "package:http_method/src/generator/builder.dart"
+    import: "package:component_generator/src/generator/builder.dart"
     builder_factories: ["networkBuilder"]
     build_extensions: {".dart": [".network.g.part"]}
     auto_apply: dependents
@@ -14,7 +14,7 @@ builders:
     applies_builders: ["source_gen|combining_builder"]
 
   widgetBuilder:
-    import: "package:http_method/src/generator/builder.dart"
+    import: "package:component_generator/src/generator/builder.dart"
     builder_factories: ["widgetBuilder"]
     build_extensions: {".dart": [".widget.g.part"]}
     auto_apply: dependents

@@ -24,7 +24,7 @@ The `@DataInterface` annotation marks an abstract class as a network interface. 
 ### Basic Usage
 
 ```dart
-import 'package:http_method/http_method.dart';
+import 'package:component_generator/component_generator.dart';
 import 'schema.dart';
 import 'myclient.dart';
 
@@ -562,7 +562,7 @@ DataColumn(label: Text(tr('user.id')))
 Here's a complete example combining multiple annotations:
 
 ```dart
-import 'package:http_method/http_method.dart';
+import 'package:component_generator/component_generator.dart';
 import 'schema.dart';
 import 'myclient.dart';
 
@@ -691,11 +691,11 @@ This example demonstrates:
 1. **Build Configuration**: Make sure your `build.yaml` includes the builders:
    ```yaml
    builders:
-     http_method:networkBuilder:
+     component_generator:networkBuilder:
        enabled: true
-     http_method:fetchBuilder:
+     component_generator:fetchBuilder:
        enabled: true
-     http_method:widgetBuilder:
+     component_generator:widgetBuilder:
        enabled: true
    ```
 

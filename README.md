@@ -28,11 +28,11 @@ A powerful Dart code generation library that automatically generates HTTP client
 
 ### Installation
 
-Add `http_method` to your `pubspec.yaml`:
+Add `component_generator` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  http_method: ^0.1.1
+  component_generator: ^0.1.1
 
 dev_dependencies:
   build_runner: ^2.3.2
@@ -42,7 +42,7 @@ dev_dependencies:
 
 1. **Create your HTTP client**:
 ```dart
-import 'package:http_method/http1_client.dart';
+import 'package:component_generator/http1_client.dart';
 
 class MyClient extends HttpClientBase {
   MyClient() : super();
@@ -104,7 +104,7 @@ class UserListResp {
 
 3. **Create your network interface**:
 ```dart
-import 'package:http_method/http_method.dart';
+import 'package:component_generator/component_generator.dart';
 
 part 'network.g.dart';
 
@@ -198,7 +198,7 @@ Generates Flutter table widgets with automatic header and data cell generation. 
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:http_method/http_method.dart';
+import 'package:component_generator/component_generator.dart';
 
 part 'user_table.g.dart';
 

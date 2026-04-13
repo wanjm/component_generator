@@ -8,7 +8,7 @@ import 'package:build/build.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_gen/source_gen.dart';
 import 'package:dart_style/dart_style.dart';
-import 'package:http_method/src/generator/annotations.dart';
+import 'package:component_generator/src/generator/annotations.dart';
 
 /// Splits a `@TableWidget` [columns] entry: the first whitespace-separated
 /// token is the model field name; any following text (trimmed) is the column
@@ -27,8 +27,8 @@ String _escapeDartSingleQuotedString(String s) {
 }
 
 const String _myClientTemplate =
-    """import 'package:http_method/http1_client.dart' as pl;
-import 'package:http_method/http_method.dart';
+    """import 'package:component_generator/http1_client.dart' as pl;
+import 'package:component_generator/component_generator.dart';
 
 class MyClient extends pl.HttpClientBase {
   MyClient() : super();

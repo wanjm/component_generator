@@ -1,9 +1,9 @@
-name: http_method
+name: component_generator
 description: >-
   Annotated HTTP client code generation (REST), optional table/widget helpers,
   and HTTP/1.1 and HTTP/2 client bases for Dart.
 version: 0.1.1
-repository: https://github.com/wanjm/http_method
+repository: https://github.com/wanjm/component_generator
 topics:
   - codegen
   - build-runner

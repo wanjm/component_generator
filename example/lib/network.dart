@@ -1,5 +1,5 @@
 import 'package:component_generator/component_generator.dart';
-import 'package:component_set/paging/pagination_controller.dart';
+import 'package:component_set/component_set.dart';
 import 'schema.dart';
 import 'myclient.dart';
 part 'network.g.dart';

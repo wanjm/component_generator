@@ -14,8 +14,7 @@ environment:
 
 # Add regular dependencies here.
 dependencies:
-  http: ^1.2.0
-  http2: ^2.1.1
+  component_set: ^0.1.1
   path: ^1.9.0
   dart_style: ^3.0.0
   analyzer: ^8.4.1
@@ -25,3 +24,7 @@ dev_dependencies:
   lints: ^6.0.0
   test: ^1.25.6
   build_runner: ^2.3.2
+
+dependency_overrides:
+  component_set:
+    path: ../../git/yxt_server/build/component

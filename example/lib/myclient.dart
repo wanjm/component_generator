@@ -1,5 +1,5 @@
-import 'package:component_generator/http1_client.dart' as pl;
-import 'package:component_generator/component_generator.dart';
+import 'package:component_set/http1_client.dart' as pl;
+import 'package:component_set/component_set.dart';
 
 class MyClient extends pl.HttpClientBase {
   MyClient() : super();

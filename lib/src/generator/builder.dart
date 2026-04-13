@@ -27,8 +27,8 @@ String _escapeDartSingleQuotedString(String s) {
 }
 
 const String _myClientTemplate =
-    """import 'package:component_generator/http1_client.dart' as pl;
-import 'package:component_generator/component_generator.dart';
+    """import 'package:component_set/http1_client.dart' as pl;
+import 'package:component_set/component_set.dart';
 
 class MyClient extends pl.HttpClientBase {
   MyClient() : super();
@@ -360,8 +360,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
       controller.setTotalCount(obj.total);
       return obj.list;
     } else {
-      throw Exception(resp.msg ??
-          "Failed to load data (code: " + resp.code.toString() + ")");
+      throw Exception(resp.msg ?? "Failed to load data (code: \${resp.code})");
     }
   }""";
   }

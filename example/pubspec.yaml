@@ -9,7 +9,11 @@ environment:
 dependencies:
   component_generator:
     path: ../
-  component_set: 0.1.1
+  component_set: ^0.1.1
 
 dev_dependencies:
   build_runner: ^2.3.2
+
+dependency_overrides:
+  component_set:
+    path: ../../../git/yxt_server/build/component

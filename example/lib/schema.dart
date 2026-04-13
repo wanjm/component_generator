@@ -1,4 +1,4 @@
-import 'package:component_generator/component_generator.dart';
+import 'package:component_set/component_set.dart';
 
 class LoginParams extends JSONParameter {
   String loginName;

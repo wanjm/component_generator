@@ -1,3 +1,10 @@
+## 0.1.2
+
+- Backward compatible with **0.1.1** for package consumers (same annotations and generated shape).
+- Raise `build` to **^4.0.0** (works with current `json_serializable` / `build_runner` stacks).
+- Widen **`analyzer` to `>=8.4.1 <14.0.0`** so apps can resolve newer `json_serializable` (analyzer 10+) in the same workspace as this package.
+- Depend on **`component_set` ^0.1.2**.
+
 ## 0.1.1
 
 - Generated list `*Fetch` helpers use `IPaginationController<T>`; import a concrete

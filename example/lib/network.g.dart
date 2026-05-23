@@ -28,7 +28,9 @@ class NetworkApi extends BaseMethod implements Network {
     buffer: bufferMap["/user/list"] as ClassBuffer<int, ListUserResp>?,
 
     encodeDataFunction: (RespData resp) {
-      resp.obj = ListUserResp.fromJson(resp.res);
+      if (resp.res != null) {
+        resp.obj = ListUserResp.fromJson(resp.res);
+      }
     },
   );
 

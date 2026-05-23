@@ -44,6 +44,14 @@ var bufferMap = <String, ClassBuffer<dynamic, dynamic>>{};
 
 const int _typeList = 1;
 
+/// Wraps encode body so [fromJson] is only called when [resp.res] is present.
+String _wrapIfResNotEmpty(String body) {
+  return """
+          if (resp.res != null) {
+            $body
+          }""";
+}
+
 /// 网络接口生成器
 class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
   // ignore: unused_field
@@ -223,12 +231,12 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
 
       switch (resultType) {
         case _typeList:
-          formatCode = """
-          resp.obj = (resp.res as List?)?.map((e) {
-            var a = $respName.fromJson(e);
-            $format
-            return a;
-          }).toList();""";
+          formatCode = _wrapIfResNotEmpty("""
+            resp.obj = (resp.res as List).map((e) {
+              var a = $respName.fromJson(e);
+              $format
+              return a;
+            }).toList();""");
           break;
         // case _typeRsList:
         //   formatCode = """
@@ -244,12 +252,13 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
         //   break;
         default:
           if (format.isEmpty) {
-            formatCode = "resp.obj = $respName.fromJson(resp.res);";
+            formatCode =
+                _wrapIfResNotEmpty("resp.obj = $respName.fromJson(resp.res);");
           } else {
-            formatCode = """
+            formatCode = _wrapIfResNotEmpty("""
             resp.obj = $respName.fromJson(resp.res);
             var a = resp.obj;
-            $format""";
+            $format""");
           }
       }
     }

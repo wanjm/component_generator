@@ -294,7 +294,7 @@ abstract class ProductApi {
 
 **Requirements:**
 - Response type must have `list` and `total` fields
-- Request type must extend `JSONParameter` and include `pageNum` and `pageSize` fields
+- Request type must extend `JSONParameter` and declare both `pageNum` and `pageSize` fields; otherwise no `*Fetch` helper is generated for that method
 - Generated fetch methods use the type name `IPaginationController<T>` (not prefixed). Your library file that declares `part '...g.dart'` must **import** a package that defines that interface (same name and members), so the part can resolve the type—for example **`package:component_set/paging/pagination_controller.dart`** as in **`example/lib/network.dart`**, or your own abstraction.
 
 ### Flutter Integration

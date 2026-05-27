@@ -352,6 +352,12 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     final parameters = (f.type as dynamic).parameters as List;
     final reqType = parameters.isNotEmpty ? parameters[0].type : null;
     if (reqType == null) return null;
+    if (reqType is! InterfaceType) return null;
+    final reqClass = reqType.element;
+    if (reqClass.getField('pageNum') == null ||
+        reqClass.getField('pageSize') == null) {
+      return null;
+    }
 
     final methodName = f.name;
     final fetchMethodName = "${methodName}Fetch";

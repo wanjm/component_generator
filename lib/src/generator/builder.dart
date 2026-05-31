@@ -31,7 +31,9 @@ const String _myClientTemplate =
 import 'package:component_set/component_set.dart';
 
 class MyClient extends pl.HttpClientBase {
-  MyClient() : super();
+  MyClient() : super(){
+    prefix = "http://127.0.0.1:8080";
+  }
   @override
   int checkResult(RespData<dynamic> a, String url, Map<String, String> headers) {
     return 0;

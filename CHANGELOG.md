@@ -1,3 +1,9 @@
+## 0.1.3
+
+- Guard generated `fromJson` calls when `resp.res` is null.
+- Skip `*Fetch` helper generation when the request type lacks `pageNum` and `pageSize` fields.
+- Default generated `MyClient` template sets `prefix` to `http://127.0.0.1:8080`.
+
 ## 0.1.2
 
 - Backward compatible with **0.1.1** for package consumers (same annotations and generated shape).

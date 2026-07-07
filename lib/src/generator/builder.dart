@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/nullability_suffix.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
 import 'package:path/path.dart' as p;
@@ -24,6 +25,28 @@ import 'package:component_generator/src/generator/annotations.dart';
 
 String _escapeDartSingleQuotedString(String s) {
   return s.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+}
+
+bool _enumHasTextMethod(DartType type) {
+  final element = type.element;
+  if (element is! EnumElement) {
+    return false;
+  }
+  final method = element.getMethod('text');
+  return method != null &&
+      method.formalParameters.isEmpty &&
+      method.returnType.isDartCoreString;
+}
+
+String _fieldDisplayTextExpr(String itemPrefix, FieldElement field) {
+  final access = '$itemPrefix${field.name}';
+  if (_enumHasTextMethod(field.type)) {
+    if (field.type.nullabilitySuffix == NullabilitySuffix.question) {
+      return 'Text($access?.text() ?? \'\')';
+    }
+    return 'Text($access.text())';
+  }
+  return 'Text($access.toString())';
 }
 
 const String _myClientTemplate =
@@ -924,7 +947,7 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
         } else {
           // Generate DataCell with onTap
           final itemPrefix = isItemContext ? "item." : "";
-          String textExpr = "Text($itemPrefix${field.name}.toString())";
+          String textExpr = _fieldDisplayTextExpr(itemPrefix, field);
           if (field.type.isDartCoreInt || field.type.isDartCoreDouble) {
             textExpr = "Center(child: $textExpr)";
           }

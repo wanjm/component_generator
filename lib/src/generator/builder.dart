@@ -518,11 +518,9 @@ class SearchFormBuilder extends GeneratorForAnnotation<SearchForm> {
     buffer.writeln('class $widgetName extends StatefulWidget {');
     buffer.writeln('  const $widgetName({');
     buffer.writeln('    super.key,');
-    buffer.writeln('    this.initialRequest,');
     buffer.writeln('    required this.onSearch,');
     buffer.writeln('  });');
     buffer.writeln();
-    buffer.writeln('  final $requestName? initialRequest;');
     buffer.writeln('  final ValueChanged<$requestName> onSearch;');
     buffer.writeln();
     buffer.writeln('  @override');
@@ -530,33 +528,15 @@ class SearchFormBuilder extends GeneratorForAnnotation<SearchForm> {
     buffer.writeln('}');
     buffer.writeln();
     buffer.writeln('class $stateName extends State<$widgetName> {');
-    buffer.writeln('  late final $requestName _baseRequest;');
-    for (final spec in specs) {
-      final fieldName = spec.field.name!;
-      final typeName = spec.field.type.getDisplayString(withNullability: true);
-      buffer.writeln('  late $typeName _$fieldName;');
-    }
-    buffer.writeln();
-    buffer.writeln('  @override');
-    buffer.writeln('  void initState() {');
-    buffer.writeln('    super.initState();');
-    buffer
-        .writeln('    _baseRequest = widget.initialRequest ?? $requestName();');
-    for (final spec in specs) {
-      final fieldName = spec.field.name!;
-      buffer.writeln('    _$fieldName = _baseRequest.$fieldName;');
-    }
-    buffer.writeln('  }');
+    buffer.writeln('  final $requestName _request = $requestName();');
     buffer.writeln();
     buffer.writeln('  void _submitSearch() {');
-    buffer.writeln(
-        '    final values = Map<String, dynamic>.from(_baseRequest.toJson());');
+    buffer.writeln('    final request = $requestName();');
     for (final spec in specs) {
       final fieldName = spec.field.name!;
-      buffer.writeln(
-          "    values['${_escapeDartSingleQuotedString(fieldName)}'] = _$fieldName;");
+      buffer.writeln('    request.$fieldName = _request.$fieldName;');
     }
-    buffer.writeln('    widget.onSearch($requestName.fromJson(values));');
+    buffer.writeln('    widget.onSearch(request);');
     buffer.writeln('  }');
     buffer.writeln();
     buffer.writeln('  void _resetSearch() {');
@@ -564,7 +544,7 @@ class SearchFormBuilder extends GeneratorForAnnotation<SearchForm> {
     buffer.writeln('    setState(() {');
     for (final spec in specs) {
       final fieldName = spec.field.name!;
-      buffer.writeln('      _$fieldName = defaults.$fieldName;');
+      buffer.writeln('      _request.$fieldName = defaults.$fieldName;');
     }
     buffer.writeln('    });');
     buffer.writeln('    _submitSearch();');
@@ -586,14 +566,14 @@ class SearchFormBuilder extends GeneratorForAnnotation<SearchForm> {
           ? 'SearchFieldWidget<$typeName>'
           : spec.widgetName;
       buffer.writeln('          $fieldWidgetName(');
-      buffer.writeln('            value: _$fieldName,');
+      buffer.writeln('            value: _request.$fieldName,');
       buffer.writeln(
           "            labelName: '${_escapeDartSingleQuotedString(spec.labelName)}',");
       buffer.writeln(
           "            hintText: '${_escapeDartSingleQuotedString(spec.hintText)}',");
       buffer.writeln('            onChanged: (value) {');
       buffer.writeln('              setState(() {');
-      buffer.writeln('                _$fieldName = value;');
+      buffer.writeln('                _request.$fieldName = value;');
       buffer.writeln('              });');
       buffer.writeln('            },');
       if (spec.widgetName.isEmpty) {

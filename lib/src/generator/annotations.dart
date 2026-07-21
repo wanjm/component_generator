@@ -15,6 +15,7 @@ class ReqConfig {
 class TableWidget {
   final bool useI18n;
   final String i18nFunction;
+
   /// Column specs: each entry is either a single field name, or
   /// `"fieldName displayLabel"` (first token = model field and codegen hooks;
   /// the rest is the column header: plain text when [useI18n] is false, or the
@@ -26,6 +27,12 @@ class TableWidget {
   /// - `["title course.title", "status course.status", "createTime 创建时间", "endTime 结束时间"]`
   final List<String> columns;
   final List<String> skips;
+
+  /// A class annotated with [SearchForm]. Its generated widget is used as the
+  /// table's search header.
+  final Type? searchForm;
+
+  /// Completely replaces [searchForm] when a hand-written header is needed.
   final Type? formWidget;
   final String? fetchData;
   const TableWidget({
@@ -33,8 +40,26 @@ class TableWidget {
     this.i18nFunction = 'tr',
     this.columns = const [],
     this.skips = const [],
+    this.searchForm,
     this.formWidget,
     this.fetchData,
+  });
+}
+
+/// Generates a reusable search widget for [requestType].
+///
+/// Each [fields] entry uses:
+/// `variableName|widgetName|labelName|hintText`.
+///
+/// Leave `widgetName` empty to use the default widget selected from the
+/// request field's type.
+class SearchForm {
+  final Type requestType;
+  final List<String> fields;
+
+  const SearchForm({
+    required this.requestType,
+    this.fields = const [],
   });
 }
 

@@ -87,7 +87,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
     final methods = <String>[];
 
     for (var methodElement in cls.methods) {
-      final methodData = _processMethod(methodElement,ifName!);
+      final methodData = _processMethod(methodElement, ifName!);
       if (methodData != null) {
         methods.add(methodData.implementation);
       }
@@ -129,8 +129,8 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
 
   /// Returns the URL expression for generated code: variable name (e.g. loginUrl)
   /// when the annotation uses a constant reference, or quoted string when literal.
-  String _getUrlExpression(
-      MethodElement f, ConstantReader reader, TypeChecker reqConfigChecker, String ifName) {
+  String _getUrlExpression(MethodElement f, ConstantReader reader,
+      TypeChecker reqConfigChecker, String ifName) {
     final stringValue = reader.read("url").stringValue;
     final session = f.session;
     final library = f.library;
@@ -326,8 +326,7 @@ class NetworkBuilder extends GeneratorForAnnotation<DataInterface> {
   }
 
   /// Process a method to generate fetch method if it returns a list response
-  String? _processFetchMethod(
-      MethodElement f, ClassElement cls) {
+  String? _processFetchMethod(MethodElement f, ClassElement cls) {
     final returnType = f.returnType;
     if (returnType is! InterfaceType) return null;
     if (returnType.typeArguments.isEmpty) return null;
@@ -420,6 +419,206 @@ class _TableWidgetParams {
   });
 }
 
+class _SearchFieldSpec {
+  final FieldElement field;
+  final String widgetName;
+  final String labelName;
+  final String hintText;
+
+  const _SearchFieldSpec({
+    required this.field,
+    required this.widgetName,
+    required this.labelName,
+    required this.hintText,
+  });
+}
+
+/// Generates a reusable stateful search form from a request class.
+class SearchFormBuilder extends GeneratorForAnnotation<SearchForm> {
+  @override
+  FutureOr<String> generateForAnnotatedElement(
+      Element element, ConstantReader annotation, BuildStep buildStep) {
+    if (element is! InterfaceElement) {
+      throw InvalidGenerationSourceError(
+        '@SearchForm can only annotate a class or mixin.',
+        element: element,
+      );
+    }
+
+    final requestType = annotation.read('requestType').typeValue;
+    if (requestType is! InterfaceType) {
+      throw InvalidGenerationSourceError(
+        'SearchForm.requestType must be a class.',
+        element: element,
+      );
+    }
+
+    final specs = <_SearchFieldSpec>[];
+    final usedNames = <String>{};
+    for (final value in annotation.read('fields').listValue) {
+      final raw = value.toStringValue() ?? '';
+      final parts = raw.split('|').map((part) => part.trim()).toList();
+      if (parts.length != 4) {
+        throw InvalidGenerationSourceError(
+          'Invalid search field "$raw". Expected '
+          'variableName|widgetName|labelName|hintText.',
+          element: element,
+        );
+      }
+
+      final variableName = parts[0];
+      if (variableName.isEmpty || !usedNames.add(variableName)) {
+        throw InvalidGenerationSourceError(
+          'Search field names must be non-empty and unique: "$variableName".',
+          element: element,
+        );
+      }
+
+      FieldElement? requestField;
+      for (final field in requestType.element.fields) {
+        if (field.name == variableName && !field.isStatic) {
+          requestField = field;
+          break;
+        }
+      }
+      if (requestField == null) {
+        throw InvalidGenerationSourceError(
+          '${requestType.element.name} has no field named "$variableName".',
+          element: element,
+        );
+      }
+
+      final widgetName = parts[1];
+      if (widgetName.isEmpty &&
+          !requestField.type.isDartCoreString &&
+          !requestField.type.isDartCoreInt &&
+          !requestField.type.isDartCoreDouble &&
+          !requestField.type.isDartCoreBool) {
+        throw InvalidGenerationSourceError(
+          'Field "$variableName" has type ${requestField.type}. '
+          'Provide a custom widget name.',
+          element: element,
+        );
+      }
+
+      specs.add(_SearchFieldSpec(
+        field: requestField,
+        widgetName: widgetName,
+        labelName: parts[2],
+        hintText: parts[3],
+      ));
+    }
+
+    final definitionName = element.name!;
+    final widgetName = '${definitionName}Widget';
+    final stateName = '_${widgetName}State';
+    final requestName = requestType.getDisplayString(withNullability: false);
+    final buffer = StringBuffer();
+
+    buffer.writeln('class $widgetName extends StatefulWidget {');
+    buffer.writeln('  const $widgetName({');
+    buffer.writeln('    super.key,');
+    buffer.writeln('    this.initialRequest,');
+    buffer.writeln('    required this.onSearch,');
+    buffer.writeln('  });');
+    buffer.writeln();
+    buffer.writeln('  final $requestName? initialRequest;');
+    buffer.writeln('  final ValueChanged<$requestName> onSearch;');
+    buffer.writeln();
+    buffer.writeln('  @override');
+    buffer.writeln('  State<$widgetName> createState() => $stateName();');
+    buffer.writeln('}');
+    buffer.writeln();
+    buffer.writeln('class $stateName extends State<$widgetName> {');
+    buffer.writeln('  late final $requestName _baseRequest;');
+    for (final spec in specs) {
+      final fieldName = spec.field.name!;
+      final typeName = spec.field.type.getDisplayString(withNullability: true);
+      buffer.writeln('  late $typeName _$fieldName;');
+    }
+    buffer.writeln();
+    buffer.writeln('  @override');
+    buffer.writeln('  void initState() {');
+    buffer.writeln('    super.initState();');
+    buffer
+        .writeln('    _baseRequest = widget.initialRequest ?? $requestName();');
+    for (final spec in specs) {
+      final fieldName = spec.field.name!;
+      buffer.writeln('    _$fieldName = _baseRequest.$fieldName;');
+    }
+    buffer.writeln('  }');
+    buffer.writeln();
+    buffer.writeln('  void _submitSearch() {');
+    buffer.writeln(
+        '    final values = Map<String, dynamic>.from(_baseRequest.toJson());');
+    for (final spec in specs) {
+      final fieldName = spec.field.name!;
+      buffer.writeln(
+          "    values['${_escapeDartSingleQuotedString(fieldName)}'] = _$fieldName;");
+    }
+    buffer.writeln('    widget.onSearch($requestName.fromJson(values));');
+    buffer.writeln('  }');
+    buffer.writeln();
+    buffer.writeln('  void _resetSearch() {');
+    buffer.writeln('    final defaults = $requestName();');
+    buffer.writeln('    setState(() {');
+    for (final spec in specs) {
+      final fieldName = spec.field.name!;
+      buffer.writeln('      _$fieldName = defaults.$fieldName;');
+    }
+    buffer.writeln('    });');
+    buffer.writeln('    _submitSearch();');
+    buffer.writeln('  }');
+    buffer.writeln();
+    buffer.writeln('  @override');
+    buffer.writeln('  Widget build(BuildContext context) {');
+    buffer.writeln('    return Padding(');
+    buffer.writeln('      padding: const EdgeInsets.only(bottom: 12),');
+    buffer.writeln('      child: Wrap(');
+    buffer.writeln('        spacing: 8,');
+    buffer.writeln('        runSpacing: 8,');
+    buffer.writeln('        crossAxisAlignment: WrapCrossAlignment.center,');
+    buffer.writeln('        children: [');
+    for (final spec in specs) {
+      final fieldName = spec.field.name!;
+      final typeName = spec.field.type.getDisplayString(withNullability: true);
+      final fieldWidgetName = spec.widgetName.isEmpty
+          ? 'SearchFieldWidget<$typeName>'
+          : spec.widgetName;
+      buffer.writeln('          $fieldWidgetName(');
+      buffer.writeln('            value: _$fieldName,');
+      buffer.writeln(
+          "            labelName: '${_escapeDartSingleQuotedString(spec.labelName)}',");
+      buffer.writeln(
+          "            hintText: '${_escapeDartSingleQuotedString(spec.hintText)}',");
+      buffer.writeln('            onChanged: (value) {');
+      buffer.writeln('              setState(() {');
+      buffer.writeln('                _$fieldName = value;');
+      buffer.writeln('              });');
+      buffer.writeln('            },');
+      if (spec.widgetName.isEmpty) {
+        buffer.writeln('            onSubmitted: _submitSearch,');
+      }
+      buffer.writeln('          ),');
+    }
+    buffer.writeln('          FilledButton(');
+    buffer.writeln('            onPressed: _submitSearch,');
+    buffer.writeln("            child: const Text('搜索'),");
+    buffer.writeln('          ),');
+    buffer.writeln('          OutlinedButton(');
+    buffer.writeln('            onPressed: _resetSearch,');
+    buffer.writeln("            child: const Text('重置'),");
+    buffer.writeln('          ),');
+    buffer.writeln('        ],');
+    buffer.writeln('      ),');
+    buffer.writeln('    );');
+    buffer.writeln('  }');
+    buffer.writeln('}');
+
+    return buffer.toString();
+  }
+}
+
 /// 自动生成 Widget 相关代码的 Builder
 class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
   @override
@@ -481,6 +680,13 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     String? formWidgetName;
     String? reqTypeName;
     final formWidgetType = annotation.peek("formWidget")?.typeValue;
+    final searchFormType = annotation.peek("searchForm")?.typeValue;
+    if (formWidgetType != null && searchFormType != null) {
+      throw InvalidGenerationSourceError(
+        'Use either TableWidget.formWidget or TableWidget.searchForm, not both.',
+        element: element,
+      );
+    }
     if (formWidgetType != null) {
       formWidgetName = formWidgetType.getDisplayString(withNullability: false);
       if (formWidgetType is InterfaceType) {
@@ -490,17 +696,46 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
             // Handle ValueChanged<T> or void Function(T)
             if (typeStr.startsWith('ValueChanged<') && typeStr.endsWith('>')) {
               reqTypeName = typeStr.substring(13, typeStr.length - 1);
-            } else if (typeStr.startsWith('void Function(') && typeStr.endsWith(')')) {
-              reqTypeName = typeStr.substring(14, typeStr.length - 1).split(',').first.trim();
+            } else if (typeStr.startsWith('void Function(') &&
+                typeStr.endsWith(')')) {
+              reqTypeName = typeStr
+                  .substring(14, typeStr.length - 1)
+                  .split(',')
+                  .first
+                  .trim();
               // Strip variable name if present, e.g. "ListHomeworkReq req" -> "ListHomeworkReq"
               reqTypeName = reqTypeName.split(' ').first;
-            } else if (field.type is ParameterizedType && (field.type as ParameterizedType).typeArguments.isNotEmpty) {
-              reqTypeName = (field.type as ParameterizedType).typeArguments.first.getDisplayString(withNullability: false);
+            } else if (field.type is ParameterizedType &&
+                (field.type as ParameterizedType).typeArguments.isNotEmpty) {
+              reqTypeName = (field.type as ParameterizedType)
+                  .typeArguments
+                  .first
+                  .getDisplayString(withNullability: false);
             }
             break;
           }
         }
       }
+    } else if (searchFormType is InterfaceType) {
+      final searchFormElement = searchFormType.element;
+      final searchAnnotation = TypeChecker.typeNamed(SearchForm)
+          .firstAnnotationOf(searchFormElement);
+      if (searchAnnotation == null) {
+        throw InvalidGenerationSourceError(
+          '${searchFormElement.name} must be annotated with @SearchForm.',
+          element: element,
+        );
+      }
+      final searchReader = ConstantReader(searchAnnotation);
+      final requestType = searchReader.read('requestType').typeValue;
+      if (requestType is! InterfaceType) {
+        throw InvalidGenerationSourceError(
+          'SearchForm.requestType must be a class.',
+          element: searchFormElement,
+        );
+      }
+      formWidgetName = '${searchFormElement.name}Widget';
+      reqTypeName = requestType.getDisplayString(withNullability: false);
     }
 
     String? fetchData;
@@ -586,10 +821,13 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     // If formWidgetName and fetchData are provided, generate the ManagementView wrapper
     if (params.formWidgetName != null && params.fetchData != null) {
       final viewName = originalName.endsWith('ContentWidgetMixin')
-          ? originalName.substring(0, originalName.length - 'ContentWidgetMixin'.length) + 'ManagementView'
+          ? originalName.substring(
+                  0, originalName.length - 'ContentWidgetMixin'.length) +
+              'ManagementView'
           : '${baseName}ManagementView';
-      
-      final publicViewName = viewName.startsWith('_') ? viewName.substring(1) : viewName;
+
+      final publicViewName =
+          viewName.startsWith('_') ? viewName.substring(1) : viewName;
 
       final reqTypeStr = params.reqTypeName ?? 'dynamic';
 
@@ -598,10 +836,12 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
       buffer.writeln("  const $publicViewName({super.key});");
       buffer.writeln();
       buffer.writeln("  @override");
-      buffer.writeln("  State<$publicViewName> createState() => _${publicViewName}State();");
+      buffer.writeln(
+          "  State<$publicViewName> createState() => _${publicViewName}State();");
       buffer.writeln("}");
       buffer.writeln();
-      buffer.writeln("class _${publicViewName}State extends State<$publicViewName> {");
+      buffer.writeln(
+          "class _${publicViewName}State extends State<$publicViewName> {");
       buffer.writeln("  $reqTypeStr? _param;");
       buffer.writeln();
       buffer.writeln("  void _onSearch($reqTypeStr req) {");
@@ -616,11 +856,13 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
       buffer.writeln("      children: [");
       buffer.writeln("        ${params.formWidgetName}(onSearch: _onSearch),");
       buffer.writeln("        if (_param != null) Expanded(");
-      buffer.writeln("          child: PaginatedView<$reqTypeStr, $tItemName>(");
+      buffer
+          .writeln("          child: PaginatedView<$reqTypeStr, $tItemName>(");
       buffer.writeln("            key: ValueKey(_param),");
       buffer.writeln("            initialParam: _param!,");
       buffer.writeln("            fetchData: ${params.fetchData},");
-      buffer.writeln("            builder: (context, data) => $implName(items: data),");
+      buffer.writeln(
+          "            builder: (context, data) => $implName(items: data),");
       buffer.writeln("          ),");
       buffer.writeln("        ),");
       buffer.writeln("      ],");
@@ -739,7 +981,7 @@ class _WidgetParts {
 /// WidgetBuilder 工厂方法
 Builder widgetBuilder(BuilderOptions options) {
   return SharedPartBuilder(
-    [WidgetBuilder()],
+    [SearchFormBuilder(), WidgetBuilder()],
     'widget',
   );
 }

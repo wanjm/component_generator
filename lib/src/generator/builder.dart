@@ -918,6 +918,12 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
     // 3. for each column gen the headers & datacell;
     for (var columnRaw in columnNames) {
       final (columnName, headerDisplay) = _splitTableColumnSpec(columnRaw);
+      final capitalizedName = columnName.isEmpty
+          ? ""
+          : "${columnName[0].toUpperCase()}${columnName.substring(1)}";
+      final showMethodName = "show${capitalizedName}Cell";
+      final hasShowMethod = methodProvider.getMethod(showMethodName) != null;
+
       // Generate header (headerDisplay may differ when columnRaw has two+ tokens)
       String columnLabel;
       if (useI18n) {
@@ -927,15 +933,12 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
         final disp = _escapeDartSingleQuotedString(headerDisplay);
         columnLabel = "const Text('$disp')";
       }
-      headers.add("DataColumn(label: $columnLabel)");
+      var headerExpr = "DataColumn(label: $columnLabel)";
 
       // 4. for datacell;
       String valueExpr;
       final field = fieldMap[columnName];
 
-      final capitalizedName = columnName.isEmpty
-          ? ""
-          : "${columnName[0].toUpperCase()}${columnName.substring(1)}";
       final customMethodName = "gen${capitalizedName}DataCell";
       if (field == null) {
         // - if column not in field, gen genXXXDataCell;
@@ -962,6 +965,14 @@ class WidgetBuilder extends GeneratorForAnnotation<TableWidget> {
         }
       }
 
+      // If showXXXCell exists, omit both header and cell when it returns false
+      // so column counts stay aligned.
+      if (hasShowMethod) {
+        headerExpr = "if ($showMethodName(context)) $headerExpr";
+        valueExpr = "if ($showMethodName(context)) $valueExpr";
+      }
+
+      headers.add(headerExpr);
       cells.add(valueExpr);
 
       detailRows.add("""TableRow(children: [

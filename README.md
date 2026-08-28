@@ -263,6 +263,9 @@ class UserTable extends TableContentWidget<UserInfo, UserReq> with UserTableMixi
 
 The `@TableWidget` annotation supports predefined methods for customizing cell behavior:
 
+#### Column visibility
+- `bool showFieldNameCell(BuildContext context)` - Omit that column's `DataColumn` and `DataCell` when this returns false
+
 #### Cell Customization Methods
 - `genFieldNameDataCell(BuildContext context, T item)` - Override cell for specific field
 

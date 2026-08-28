@@ -1,3 +1,7 @@
+## 0.1.4
+
+- `@TableWidget`: if the mixin defines `showXXXCell`, generated headers and cells wrap that column with `if (showXXXCell(context))`.
+
 ## 0.1.3
 
 - Guard generated `fromJson` calls when `resp.res` is null.

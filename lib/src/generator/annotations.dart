@@ -21,6 +21,12 @@ class TableWidget {
   /// the rest is the column header: plain text when [useI18n] is false, or the
   /// key passed to [i18nFunction] when [useI18n] is true). If there is only one
   /// token, that string is used for both field binding and header/i18n key.
+  ///
+  /// Codegen hooks on the annotated mixin (XXX = capitalized field name):
+  /// - `bool showXXXCell(BuildContext context)` — omit that column's
+  ///   DataColumn and DataCell when this returns false.
+  /// - `DataCell genXXXDataCell(BuildContext context, T item)` — custom cell.
+  /// - `void onXXXTap(BuildContext context, T item)` — cell tap handler.
   /// Examples:
   /// - `["title", "createTime", "endTime"]`
   /// - `["title course.title", "status course.status"]`

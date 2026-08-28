@@ -2,7 +2,7 @@ name: component_generator
 description: >-
   Annotated HTTP client code generation (REST), optional table/widget helpers,
   and HTTP/1.1 and HTTP/2 client bases for Dart.
-version: 0.1.3
+version: 0.1.4
 repository: https://github.com/wanjm/component_generator
 topics:
   - codegen

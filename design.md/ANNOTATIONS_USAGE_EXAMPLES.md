@@ -316,6 +316,48 @@ Each `columns` entry is either:
 
 Single-token and two-part entries can be mixed in the same list.
 
+### Conditional columns (`showXXXCell`)
+
+If the mixin defines `bool showFieldNameCell(BuildContext context)`, generated `genTableHeader` and `genTableData` wrap that column's `DataColumn` and `DataCell` with `if (showFieldNameCell(context))`. Header and cell counts stay aligned. Use this for permission-based columns instead of returning an empty `DataCell`.
+
+```dart
+@TableWidget(columns: ["id", "name", "switchOrg 切换"])
+mixin _OrgContentWidgetMixin on TableContentWidget<OrgItem> {
+  bool showSwitchOrgCell(BuildContext context) {
+    return appData.userInfo?.isAdmin == true;
+  }
+
+  DataCell genSwitchOrgDataCell(BuildContext context, OrgItem item) {
+    return DataCell(
+      TextButton(
+        onPressed: () => _onSwitchOrg(context, item),
+        child: const Text('切换'),
+      ),
+    );
+  }
+}
+```
+
+Generated:
+
+```dart
+List<DataColumn> genTableHeader(BuildContext context) {
+  return [
+    DataColumn(label: const Text('id')),
+    DataColumn(label: const Text('name')),
+    if (showSwitchOrgCell(context)) DataColumn(label: const Text('切换')),
+  ];
+}
+
+List<DataCell> genTableData(BuildContext context, OrgItem item) {
+  return [
+    DataCell(Center(child: Text(item.id.toString()))),
+    DataCell(Text(item.name.toString())),
+    if (showSwitchOrgCell(context)) genSwitchOrgDataCell(context, item),
+  ];
+}
+```
+
 ### Basic Table Usage
 
 To just generate a table content widget with specific columns:

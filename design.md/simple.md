@@ -8,3 +8,4 @@
 2. 支持column的黑白名单，自动生成genHeader和genCell，build方法
 3. 支持自动绑定onXXXTap响应函数；
 4. 支持自动使用genXXXCell,返回格子的内容；
+5. 支持自动使用showXXXCell，确定某个Column是否显示
